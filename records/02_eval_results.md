@@ -93,6 +93,28 @@ OCR 종단(EasyOCR ko): 클라우드 char 0.913, 엣지(INT8) char 0.895. 도식
 합성 사전학습이 scratch 대비 이득은 작음(합성-실 도메인 거리). 산출: `data/real_finetune.json`,
 `data/real_metrics.json`, 몽타주 `figs/real_validation.png`. 스크립트: `scripts/eval_real.py`·`finetune_real.py`
 
+### ★③ 환경분류 실 도로장면 검증 (BDD100K 1,053장, weather/timeofday 실라벨)
+③을 **실 주행이미지**에 적용. 5클래스 매핑(rainy→rain·snowy→snow·foggy→fog·night→low_light·
+daytime clear→day_normal). 정직히 **약하게** 나왔고, *무엇이 전이되고 무엇이 안 되는지*가 핵심:
+
+| | 전체 acc | low_light(야간) | day_normal | rain | snow |
+|---|---|---|---|---|---|
+| 합성 ③ → 실 (전이) | **0.36** | **0.99** ✅ | 0.00 | 0.47 | 0.00 |
+| 실-보정 ③ (RF, 실 train) | **0.52** | 0.78 | 0.67 | 0.46 | 0.18 |
+
+(실 4클래스 5-fold CV 0.543±0.023, fog는 BDD 13장뿐이라 헤드라인 제외)
+
+★ **정직 결론 (포폴은 이 톤으로)**:
+- **저조도(야간) 감지는 실 전이됨(0.99)** — 휘도(국방 표적감시 이전기술)는 물리적이라 실작동.
+  → ③의 핵심인 *저조도 OCR 게이팅/IR 폴백 정책*은 실 환경에서 유효.
+- **합성 날씨피처는 실 미전이** — `streak_coh`(비)가 실 주간 도로질감에 과발화해 day_normal을
+  "rain"으로 오인(62/74), `speckle`(눈)이 실 눈(지면 적설)에 미발화. 합성=깨끗한 아스팔트 위
+  *오버레이* vs 실=장면 전체 기상 + BDD 라벨=기상맥락(프레임 내 외형 아님)이라 의미도 어긋남.
+- → **세부 날씨분류는 합성 전용**(실 외형정합 라벨로 재학습 필요)이라 정직히 한계로 명시.
+  glare/backlit/overexposed는 공개 실라벨 자체가 없어 합성 전용 유지.
+
+산출: `data/real_adaptive.json`, 도식 `figs/real_adaptive.png`. 스크립트: `scripts/eval_adaptive_real.py`
+
 ## ② 불법주차 이상탐지 (test=800)
 
 | 구성 | Precision | Recall | F1 |
