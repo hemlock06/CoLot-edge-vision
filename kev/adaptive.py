@@ -55,17 +55,31 @@ def brightness_features(bgr: np.ndarray) -> dict:
     dark_channel = float(bgr.min(axis=2).mean())
     sat_mean = float(cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[..., 1].mean())
 
+    # 비 지표: 방향성 그래디언트 이방성 (빗줄기는 한 방향으로 정렬 → 방향 히스토그램 피크)
+    gx = cv2.Sobel(y, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(y, cv2.CV_32F, 0, 1, ksize=3)
+    omag = np.sqrt(gx * gx + gy * gy)
+    ori = np.arctan2(gy, gx) % np.pi                     # 무향 선분 → [0,π)
+    oh, _ = np.histogram(ori, bins=18, range=(0, np.pi), weights=omag)
+    oh = oh / (oh.sum() + 1e-6)
+    grad_aniso = float(oh.max() - oh.mean())             # 방향 피크(이방성) → 비
+
+    # 눈 지표: 작은 밝은 점 밀도 (white top-hat = 원본 − 열림 → 작은 고휘도 반점)
+    _ker = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    speckle = float(cv2.morphologyEx(y, cv2.MORPH_TOPHAT, _ker).mean())
+
     return dict(mean=float(flat.mean()), std=float(flat.std()),
                 p05=float(p05), p50=float(p50), p95=float(p95),
                 sat_hi=sat_hi, sat_lo=sat_lo, dyn_range=dyn_range,
                 center=center, border=border, backlit=border - center,
                 lap_var=lap_var, glare_blob=glare_blob,
-                dark_channel=dark_channel, sat_mean=sat_mean)
+                dark_channel=dark_channel, sat_mean=sat_mean,
+                grad_aniso=grad_aniso, speckle=speckle)
 
 
 FEATURE_ORDER = ["mean", "std", "p05", "p50", "p95", "sat_hi", "sat_lo",
                  "dyn_range", "backlit", "lap_var", "glare_blob",
-                 "dark_channel", "sat_mean"]
+                 "dark_channel", "sat_mean", "grad_aniso", "speckle"]
 
 
 def feature_vector(feats: dict) -> np.ndarray:
