@@ -13,7 +13,7 @@ from typing import Optional
 import numpy as np
 import cv2
 
-from .config import PlateCfg, PLATE_RE, DATA, SEED
+from .config import PlateCfg, PLATE_RE, PLATE_HANGUL, DATA, SEED
 from .plate_synth import make_scene, relight, random_plate_text
 
 
@@ -170,15 +170,28 @@ class OnnxYolo:
         return (time.perf_counter() - t) / n * 1000.0
 
 
-# ---- OCR + 포맷 검증 ----------------------------------------------------
-_HAN2DIGIT_NOISE = {}  # 필요시 교정 테이블
+# ---- OCR + 포맷 교정/검증 ----------------------------------------------
+# 번호판에 등장할 수 있는 문자만 허용(EasyOCR allowlist)
+PLATE_ALLOW = "0123456789" + "".join(PLATE_HANGUL)
+# 숫자 자리에서 흔한 OCR 혼동 → 숫자 교정
+_DIGIT_FIX = {"O": "0", "o": "0", "D": "0", "Q": "0", "I": "1", "l": "1",
+              "|": "1", "Z": "2", "S": "5", "B": "8", "G": "6", "ß": "8"}
+
+
+def correct_plate(raw: str):
+    """OCR 원문 → 번호판 포맷 교정. (정제문자열, valid)."""
+    s = "".join(_DIGIT_FIX.get(c, c) for c in raw if not c.isspace())
+    s = "".join(c for c in s if c.isdigit() or "가" <= c <= "힣")  # 숫자·한글만
+    return s, bool(re.match(PLATE_RE, s))
 
 
 class PlateReader:
-    """검출 + easyocr 한글 인식 + 포맷 검증."""
+    """검출 + easyocr 한글 인식 + 포맷 교정/검증."""
 
-    def __init__(self, detector, ocr_langs=("ko", "en"), gpu=True, ocr_reader=None):
+    def __init__(self, detector, ocr_langs=("ko", "en"), gpu=True, ocr_reader=None,
+                 use_allowlist=True):
         self.det = detector                 # OnnxYolo 또는 ultralytics YOLO
+        self.allow = PLATE_ALLOW if use_allowlist else None
         if ocr_reader is not None:           # 공유 인스턴스(메모리 절약)
             self.ocr = ocr_reader
         else:
@@ -202,9 +215,11 @@ class PlateReader:
             crop = img[y0:y1, x0:x1]
             if crop.size == 0:
                 continue
-            txt = "".join(self.ocr.readtext(crop, detail=0)).replace(" ", "")
-            results.append(dict(bbox=(x0, y0, x1, y1), conf=conf, text=txt,
-                                valid=bool(re.match(PLATE_RE, txt))))
+            kw = {"allowlist": self.allow} if self.allow else {}
+            raw = "".join(self.ocr.readtext(crop, detail=0, **kw))
+            txt, valid = correct_plate(raw)
+            results.append(dict(bbox=(x0, y0, x1, y1), conf=conf,
+                                text=txt, raw=raw, valid=valid))
         return results
 
 
