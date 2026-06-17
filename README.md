@@ -26,9 +26,9 @@
 | 기여 | 내용 |
 |---|---|
 | **③ 휘도·악천후 환경적응** | 밝기 5 + 악천후 3 = **8환경** RF 분류 0.972(손룰 0.47). 모션 게이팅·IR·보정·절전 정책으로 **추론 전력 −53.9%·낭비 OCR −58.5%**, 회수가능 캡처 **100% 유지** |
-| **① 온디바이스 경량화** | YOLOv8n 합성 한글 번호판 학습 → ONNX → **정적 INT8 양자화**. 24.4→**3.4MB(7.2×↓)**, ONNX-CPU **14ms(≈GPU급)**, 검출 0.96·OCR 문자정확도 0.913→0.895 **유지** |
-| **② 불법주차 이상탐지** | 예약/결제 원장 대조 **룰(P=1.0)** + IsolationForest로 *원장 정상인 subtle 센서고장* 보강 → **센서고장 재현율 70.5→88.6** |
-| **통합·정직성** | ③→①→② 단일 엣지 파이프라인 + CLI + 데모, **pytest 26**. 합성 데이터·하드웨어 의존성·정밀도 트레이드오프를 정직하게 명시 |
+| **① 온디바이스 경량화 + 다중프레임 투표** | YOLOv8n 합성 한글 번호판 → ONNX → **정적 INT8**(24.4→**3.4MB(7.2×↓)**, ONNX-CPU **14ms**, OCR char 0.913→0.895). **다중프레임 문자투표**로 악천후 OCR 회복(비 77→**90**·눈 77→**93**%) |
+| **② 불법주차 이상탐지 + 실시간 경보 + 정산** | 원장 대조 **룰(P=1.0)** + IsolationForest로 subtle 센서고장 **70.5→88.6**. **실시간 조기 경보**(주차 중 100% 탐지·평균 168분 선행) + **분단위 정산 e2e**(30분 블록 대비 절감) |
+| **통합·정직성** | ③→①→② 단일 엣지 파이프라인 + CLI + 데모, **pytest 30**. 합성 데이터·하드웨어 의존성·정밀도 트레이드오프를 정직하게 명시 |
 
 ---
 
@@ -75,6 +75,16 @@ GPU 없이 CPU 14ms 실시간 · 모델 7.2× 압축 · OCR 문자정확도 0.91
 *한계*: INT8 CPU 지연은 VNNI/NPU 가속이 없으면 FP32보다 빠르지 않음(이 데스크톱 기준).
 ![plate](figs/plate_quant.png)
 
+**다중프레임 추적 + 판독 투표** (`kev/tracking.py`) — 한 차량을 여러 프레임 관측 →
+문자 단위 다수결로 합의. 악천후 OCR(완전일치) 회복:
+
+| | 맑음 | 비 | 안개 | 눈 |
+|---|---|---|---|---|
+| 단일 프레임 | 90.0 | 76.7 | 82.9 | 76.7 |
+| **7프레임 투표** | 90.0 | **90.0** | 83.3 | **93.3** |
+
+![voting](figs/voting.png)
+
 ### ② 불법주차 이상탐지 (`kev/anomaly.py`)
 
 | 구성 | Precision | Recall | F1 |
@@ -84,6 +94,15 @@ GPU 없이 CPU 14ms 실시간 · 모델 7.2× 압축 · OCR 문자정확도 0.91
 
 유형별 재현율(룰→룰+ML): 무단점유 100→100 · 초과주차 74.0→77.9 · **센서고장 70.5→88.6**.
 ![anomaly](figs/anomaly_recall.png)
+
+**실시간 조기 경보** (`kev/streaming.py`) — 분 단위 점유 스트림에서 위반 발생 즉시 경보
+(출차 후 배치가 아니라 *주차 중*). 무단 100%·초과 100% **주차 중 탐지**, 출차 대비
+평균 **168분 선행**(무단 169·초과 16·stuck 1478분).
+
+**분단위 정산 e2e** (`kev/billing.py`) — 번호판(①)+점유(센서)→분단위 요금. 7분 주차
+**280원**(경쟁사 30분 블록 1,200원 대비 절감) · 초과=할증 · 무단=과태료.
+
+![streaming](figs/streaming.png)
 
 ### 통합 데모
 ![pipeline](figs/pipeline_demo.png)
@@ -99,6 +118,9 @@ python scripts/eval_adaptive.py        # ③ 환경분류·전력-커버리지
 python scripts/build_plate.py          # ① 학습→ONNX→INT8→벤치→OCR
 python scripts/eval_anomaly.py         # ② 이상탐지 P/R/F1
 python scripts/eval_weather_ocr.py     # 악천후 OCR 열화
+python scripts/eval_voting.py          # 다중프레임 투표 회복
+python scripts/eval_streaming.py       # ② 실시간 조기 경보
+python scripts/demo_billing.py         # 분단위 정산 영수증
 python scripts/make_gallery.py         # 합성 이미지 갤러리
 python scripts/make_viz2.py            # ③ 판단·② 데이터 시각화
 
@@ -114,14 +136,18 @@ pytest -q                              # 26 passed
 ```
 kev/
   adaptive.py     ③ 휘도·악천후 환경적응 (피처·분류·센싱 정책)
-  plate.py        ① 검출·ONNX·정적 INT8·OnnxYolo·OCR
+  plate.py        ① 검출·ONNX·정적 INT8·OnnxYolo·OCR·포맷교정
+  tracking.py     ① 다중프레임 추적 + 문자단위 판독 투표
   plate_synth.py  합성 한글 번호판·장면·조명·악천후 증강
   anomaly.py      ② 룰 + IsolationForest 이상탐지
+  streaming.py    ② 실시간 조기 경보 (분 단위 스트림)
+  billing.py      분단위 정산 (영수증·할증·과태료)
   occupancy.py    점유/예약 시뮬레이터
   pipeline.py     ③→①→② 통합
   demo.py / cli.py / plotting.py / config.py
-scripts/          eval_adaptive · build_plate · eval_anomaly · eval_weather_ocr · make_gallery · make_viz2
-tests/            pytest (26)
+scripts/          eval_adaptive · build_plate · eval_anomaly · eval_weather_ocr
+                  eval_voting · eval_streaming · demo_billing · make_gallery · make_viz2
+tests/            pytest (30)
 records/          설계 결정·평가·실행·이슈 기록 (decisions.md 인덱스)
 ```
 

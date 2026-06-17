@@ -157,3 +157,50 @@ def test_detector_fit_predict():
 def test_features_dim():
     e = Event(1, 0, 40, True, 80, 0, "normal")
     assert len(features(e)) == len(FEATS)
+
+
+# ---- #3 OCR 교정 ----
+def test_correct_plate():
+    from kev.plate import correct_plate
+    assert correct_plate("12가3456") == ("12가3456", True)
+    assert correct_plate("1 2가 3456") == ("12가3456", True)   # 공백 제거
+    assert correct_plate("12O3456")[1] is False                # 한글 없음 → invalid
+    assert correct_plate("12가34I6")[0] == "12가3416"          # I→1 교정
+
+
+# ---- #1 다중프레임 투표 ----
+def test_vote_chars_majority():
+    from kev.tracking import vote_chars, PlateVoter
+    text, agree = vote_chars(["12가3456", "12가3456", "12가3457"])
+    assert text == "12가3456" and agree > 0.9
+    v = PlateVoter()
+    for s in ["43누5000", "43누5000", "439우5000", "43누5000"]:
+        v.add(s, already_corrected=True)
+    assert v.consensus()["text"] == "43누5000"
+
+
+# ---- #2 실시간 조기 경보 ----
+def test_streaming_early_alert():
+    from kev.streaming import StreamingMonitor
+    mon = StreamingMonitor()
+    # 무단점유: 미예약, 100분 점유 → 주차 중 경보(시간<end, lead>0)
+    a = mon.alert_for(Event(3, 0, 100, False, -1, 0, "unauthorized"), 0)
+    assert a is not None and a.kind == "unauthorized"
+    assert a.time < 100 and a.lead > 0 and a.delay == mon.unauth_grace
+    # 초과주차: 결제 40, 점유 100 → overstay 경보
+    b = mon.alert_for(Event(3, 0, 100, True, 40, 0, "overstay"), 1)
+    assert b is not None and b.kind == "overstay" and b.lead > 0
+
+
+# ---- #4 분단위 정산 ----
+def test_billing_settle():
+    from kev.billing import settle, RATE, PENALTY
+    # 정상 7분 → 분단위 = 7*RATE, 블록 대비 절감
+    r = settle(Event(1, 0, 7, True, 30, 0, "normal"), "12가3456")
+    assert r.amount == 7 * RATE and r.saving > 0 and r.status == "정산완료"
+    # 무단 → 과태료
+    u = settle(Event(1, 0, 50, False, -1, 0, "unauthorized"), "12가3456")
+    assert u.penalty == PENALTY and u.amount == PENALTY
+    # 초과 → 할증
+    o = settle(Event(1, 0, 80, True, 40, 0, "overstay"), "12가3456")
+    assert o.surcharge > 0 and o.amount > 80 * RATE
