@@ -27,7 +27,10 @@ class Event:
 def simulate(n_events: int = 1200, n_spots: int = 40, days: int = 14,
              seed: int = 20231016,
              mix=(("normal", .72), ("unauthorized", .12),
-                  ("overstay", .10), ("fault", .06))) -> List[Event]:
+                  ("overstay", .10), ("fault", .06)),
+             random_faults: bool = False) -> List[Event]:
+    """random_faults=True: 고장을 *명백/subtle 설계 없이* 연속 파라미터로 생성
+    → 자기충족 ablation 반박용(룰·ML 모두 데이터에 맞춰지지 않은 상태에서 평가)."""
     rng = np.random.default_rng(seed)
     labels = [m[0] for m in mix]
     probs = np.array([m[1] for m in mix]); probs /= probs.sum()
@@ -48,6 +51,18 @@ def simulate(n_events: int = 1200, n_spots: int = 40, days: int = 14,
         elif lab == "overstay":
             paid_min = dur * float(rng.uniform(0.4, 0.8))   # 결제는 짧게
             paid_end = start + paid_min
+        elif lab == "fault" and random_faults:
+            # 연속 파라미터: 한 축(flicker/장시간/초단시간)에 임의 크기 이상.
+            # 룰 임계(2분·20·18h)를 연속으로 가로질러 명백/subtle 구분 없음.
+            reserved = bool(rng.random() < 0.5)
+            axis = int(rng.integers(0, 3))
+            if axis == 0:                                   # flicker 임의 크기
+                flicker = int(rng.integers(5, 80)); dur = float(rng.uniform(10, 120))
+            elif axis == 1:                                 # 장시간(연속)
+                dur = float(np.exp(rng.uniform(np.log(6 * 60), np.log(72 * 60))))
+            else:                                           # 초단시간(연속)
+                dur = float(rng.uniform(0.3, 5.0))
+            paid_end = start + dur * float(rng.uniform(1.0, 1.5)) if reserved else -1.0
         elif lab == "fault":
             ftype = rng.integers(0, 4)
             if ftype == 0:            # stuck-on(명백) — 룰 포착
@@ -71,8 +86,6 @@ def simulate(n_events: int = 1200, n_spots: int = 40, days: int = 14,
                     dur = float(rng.uniform(2.5, 4.5))
                 paid_end = start + dur * float(rng.uniform(1.15, 1.5))
         end = start + dur
-        if reserved and paid_end > 0 and lab == "normal":
-            pass
         evs.append(Event(spot, start, end, reserved, paid_end, flicker, lab))
     evs.sort(key=lambda e: e.start)
     return evs

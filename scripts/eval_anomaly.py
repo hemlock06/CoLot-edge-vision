@@ -70,6 +70,18 @@ def main():
     res["overstay_mean_violation_min"] = float(np.mean(over)) if over else None
     res["overstay_alert_latency_min"] = AnomalyCfg().overstay_grace_min
 
+    # ── A2: 비설계 랜덤고장 견고성 (자기충족 ablation 반박) ──
+    evs_r = simulate(n_events=1600, seed=SEED, random_faults=True)
+    cr = int(len(evs_r) * 0.5); tr_r, te_r = evs_r[:cr], evs_r[cr:]
+    y_r = [e.label for e in te_r]
+    pr_rule = [f.pred for f in ParkingAnomalyDetector(AnomalyCfg(), seed=SEED).predict(te_r)]
+    pr_ml = [f.pred for f in ParkingAnomalyDetector(AnomalyCfg(), seed=SEED)
+             .fit([e for e in tr_r if e.label == "normal"]).predict(te_r)]
+    res["random_fault"] = dict(
+        rule_only=binary(y_r, pr_rule), rule_ml=binary(y_r, pr_ml),
+        fault_recall_rule=per_type_recall(y_r, pr_rule)["fault"],
+        fault_recall_ml=per_type_recall(y_r, pr_ml)["fault"])
+
     (DATA / "anomaly_metrics.json").write_text(
         json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -116,6 +128,11 @@ def main():
         print(f"  {t:12s} {res['recall_rule'][t]*100:5.1f}% → {res['recall_ml'][t]*100:5.1f}%")
     print(f"test={res['n_test']} anomalies={res['n_anom']} "
           f"overstay위반평균={res['overstay_mean_violation_min']}")
+    rf = res["random_fault"]
+    print("=== A2: 비설계 랜덤고장 (자기충족 반박) ===")
+    print(f"  룰만      P={rf['rule_only']['precision']:.3f} R={rf['rule_only']['recall']:.3f} F1={rf['rule_only']['f1']:.3f}")
+    print(f"  룰+IForest P={rf['rule_ml']['precision']:.3f} R={rf['rule_ml']['recall']:.3f} F1={rf['rule_ml']['f1']:.3f}")
+    print(f"  센서고장 재현율(룰 → 룰+ML): {rf['fault_recall_rule']*100:.1f}% → {rf['fault_recall_ml']*100:.1f}%")
 
 
 if __name__ == "__main__":

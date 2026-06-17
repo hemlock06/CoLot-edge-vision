@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from kev.plotting import use_korean; use_korean()
 from kev.config import DATA, FIGS, SEED, PlateCfg
 from kev.plate import (build_yolo_dataset, train_detector, export_onnx,
-                       quantize_int8, quantize_static_int8, OnnxYolo,
+                       quantize_static_int8, OnnxYolo,
                        PlateReader, char_accuracy)
 
 DS = DATA / "plate_ds"

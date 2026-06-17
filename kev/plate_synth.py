@@ -174,13 +174,62 @@ def add_weather(bgr: np.ndarray, weather: str, rng: np.random.Generator) -> np.n
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
-def apply_env(scene: np.ndarray, env: str, rng: np.random.Generator) -> np.ndarray:
-    """환경 라벨 → 밝기(relight) 또는 악천후(add_weather) 증강 디스패치."""
+# ---- variant B: OOD 검증용 2차 증강기 (같은 환경 의미, 다른 파라미터) ----
+# 목적: genA로 학습한 환경분류기를 genB로 테스트 → 'A의 변환을 외운 게 아니라
+# 환경 통계(휘도·대비·dark-channel)를 학습했다'는 순환성 반박 증거.
+def relight_b(bgr, env, rng):
+    img = bgr.astype(np.float32); h, w = img.shape[:2]
+    if env == "day_normal":
+        img = img * rng.uniform(0.85, 1.15) + rng.uniform(-12, 12)
+    elif env == "low_light":
+        img = img * rng.uniform(0.22, 0.40) + rng.normal(0, 12, img.shape)
+    elif env == "overexposed":
+        img = img * rng.uniform(1.4, 1.95) + rng.uniform(55, 100)
+    elif env == "glare":
+        cx, cy = int(rng.uniform(.15, .85) * w), int(rng.uniform(.15, .85) * h)
+        Y, X = np.ogrid[:h, :w]; rad = rng.uniform(0.10, 0.19) * (w + h)
+        blob = np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * rad ** 2))
+        img += blob[..., None] * rng.uniform(250, 330)
+    elif env == "backlit":
+        Y, X = np.ogrid[:h, :w]; d = np.sqrt((X - w/2) ** 2 + (Y - h/2) ** 2)
+        img = img * 0.42 + (d / d.max())[..., None] * rng.uniform(105, 165)
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def add_weather_b(bgr, weather, rng):
+    img = bgr.astype(np.float32); h, w = img.shape[:2]
+    if weather == "rain":
+        gray = img.mean(2, keepdims=True); img = img * 0.74 + gray * 0.12 + 10
+        layer = np.zeros((h, w), np.float32); ang = rng.uniform(-28, 12)
+        for _ in range(int(rng.uniform(300, 560))):
+            x, y = rng.integers(0, w), rng.integers(0, h); ln = int(rng.uniform(10, 26))
+            dx = int(ln*np.sin(np.deg2rad(ang))); dy = int(ln*np.cos(np.deg2rad(ang)))
+            cv2.line(layer, (x, y), (x+dx, y+dy), float(rng.uniform(110, 210)), 1)
+        layer = cv2.GaussianBlur(layer, (1, (max(3, int(rng.uniform(9, 15)))) | 1), 0)
+        img += layer[..., None] * 0.8; img = cv2.GaussianBlur(img, (3, 3), 0)
+    elif weather == "fog":
+        t = float(rng.uniform(0.30, 0.52)); A = float(rng.uniform(180, 218))
+        img = img * t + A * (1 - t); img = img * 0.90 + img.mean(2, keepdims=True) * 0.10
+        img = cv2.GaussianBlur(img, (5, 5), 0)
+    elif weather == "snow":
+        img = img * 0.93 + 20; flakes = np.zeros((h, w), np.float32)
+        for _ in range(int(rng.uniform(200, 430))):
+            x, y = rng.integers(0, w), rng.integers(0, h)
+            cv2.circle(flakes, (x, y), int(rng.uniform(1, 5)), float(rng.uniform(190, 255)), -1)
+        flakes = cv2.GaussianBlur(flakes, (5, 5), 0); img += flakes[..., None] * 0.9
+        img = cv2.GaussianBlur(img, (3, 3), 0)
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def apply_env(scene: np.ndarray, env: str, rng: np.random.Generator,
+              variant: str = "A") -> np.ndarray:
+    """환경 라벨 → 밝기/악천후 증강 디스패치. variant='B'는 OOD 검증용 2차 생성기."""
     from .config import WEATHER_ENVS
+    _relight = relight_b if variant == "B" else relight
+    _weather = add_weather_b if variant == "B" else add_weather
     if env in WEATHER_ENVS:
-        base = relight(scene, "day_normal", rng)        # 주간 베이스에 악천후 적용
-        return add_weather(base, env, rng)
-    return relight(scene, env, rng)
+        return _weather(_relight(scene, "day_normal", rng), env, rng)
+    return _relight(scene, env, rng)
 
 
 def build_plate_dataset(n: int, out_dir: Path, seed: int = SEED,

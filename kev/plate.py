@@ -66,19 +66,12 @@ def train_detector(data_yaml: Path, epochs=40, imgsz=320, out=DATA / "runs",
     return Path(out) / "plate" / "weights" / "best.pt"
 
 
-# ---- 경량화: ONNX export + INT8 -----------------------------------------
+# ---- 경량화: ONNX export + 정적 INT8 ------------------------------------
+# (동적 양자화 quantize_dynamic은 conv 미가속으로 지연 역행 → 폐기, records/01 참조)
 def export_onnx(pt_path: Path, imgsz=320) -> Path:
     from ultralytics import YOLO
     p = YOLO(str(pt_path)).export(format="onnx", imgsz=imgsz, opset=13, simplify=True)
     return Path(p)
-
-
-def quantize_int8(onnx_fp32: Path) -> Path:
-    """ONNX 동적 INT8 양자화(가중치). onnxruntime.quantization."""
-    from onnxruntime.quantization import quantize_dynamic, QuantType
-    out = Path(onnx_fp32).with_name(Path(onnx_fp32).stem + "_int8.onnx")
-    quantize_dynamic(str(onnx_fp32), str(out), weight_type=QuantType.QInt8)
-    return out
 
 
 # ---- ONNX YOLOv8 추론(엣지 런타임) --------------------------------------

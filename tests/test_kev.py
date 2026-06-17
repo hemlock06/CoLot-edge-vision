@@ -204,3 +204,50 @@ def test_billing_settle():
     # 초과 → 할증
     o = settle(Event(1, 0, 80, True, 40, 0, "overstay"), "12가3456")
     assert o.surcharge > 0 and o.amount > 80 * RATE
+
+
+# ---- 재검증 보강: 순환성·자기충족·스트리밍 반박 회귀 ----
+def test_apply_env_variant_b_differs():
+    scene = make_scene("12가3456", rng)[0]
+    a = apply_env(scene, "fog", rng, variant="A")
+    b = apply_env(scene, "fog", rng, variant="B")
+    assert a.shape == b.shape == scene.shape and not np.array_equal(a, b)
+
+
+def test_adaptive_ood_generalizes():
+    """variant A 학습 → variant B 테스트: 순환성(증강 외우기) 반박."""
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score
+
+    def gen(n, seed, variant):
+        g = np.random.default_rng(seed); p = random.Random(seed); X, y = [], []
+        for _ in range(n):
+            sc = make_scene(random_plate_text(p), g)[0]
+            for env in ENVS:
+                img = apply_env(sc, env, g, variant=variant)
+                X.append(feature_vector(brightness_features(img))); y.append(env)
+        return np.array(X, np.float32), np.array(y)
+    Xa, ya = gen(24, 1, "A"); Xb, yb = gen(12, 2, "B")
+    clf = RandomForestClassifier(n_estimators=120, max_depth=10, random_state=0).fit(Xa, ya)
+    assert accuracy_score(yb, clf.predict(Xb)) >= 0.80
+
+
+def test_random_faults_ml_helps():
+    """비설계 랜덤고장에서도 ML이 룰보다 센서고장 재현율 높음 (자기충족 반박)."""
+    from kev.anomaly import ParkingAnomalyDetector
+    evs = simulate(n_events=1200, seed=3, random_faults=True)
+    cut = len(evs) // 2; tr, te = evs[:cut], evs[cut:]
+    rp = [f.pred for f in ParkingAnomalyDetector().predict(te)]
+    mp = [f.pred for f in ParkingAnomalyDetector().fit(
+        [e for e in tr if e.label == "normal"]).predict(te)]
+    fidx = [i for i, e in enumerate(te) if e.label == "fault"]
+    rr = np.mean([rp[i] != "normal" for i in fidx])
+    rm = np.mean([mp[i] != "normal" for i in fidx])
+    assert rm > rr
+
+
+def test_streaming_alerts_in_occupancy():
+    """모든 경보가 주차 중(출차 전) 발생 + 지연≥0."""
+    from kev.streaming import StreamingMonitor
+    alerts = StreamingMonitor().run(simulate(n_events=600, seed=4))
+    assert alerts and all(a.lead > 0 and a.delay >= 0 for a in alerts)

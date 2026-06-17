@@ -55,10 +55,22 @@ class StreamingMonitor:
         return Alert(e.spot, at, kind, onset, at - onset, e.end - at, idx)
 
     def run(self, events: List[Event]) -> List[Alert]:
-        out = []
+        """이벤트-구동 스트림 처리 — 후보 위반시각을 시간순으로 흘리며,
+        점유가 활성인 동안 위반이 처음 성립하는 시점에 경보(점유당 1회)."""
+        cands = []
         for i, e in enumerate(events):
-            a = self.alert_for(e, i)
-            if a is not None:
-                out.append(a)
-        out.sort(key=lambda a: a.time)
+            if not e.reserved:
+                cands.append((e.start + self.unauth_grace, i, "unauthorized", e.start))
+            if e.reserved and e.paid_end > 0:
+                cands.append((e.paid_end + self.cfg.overstay_grace_min, i, "overstay", e.paid_end))
+            cands.append((e.start + self.stuck_min, i, "sensor_fault", e.start))
+        cands.sort(key=lambda c: c[0])               # 시간순 스트림
+        alerted, out = set(), []
+        for at, i, kind, onset in cands:
+            if i in alerted:
+                continue
+            e = events[i]
+            if e.start <= at < e.end:                 # 점유 활성 중에만 경보
+                out.append(Alert(e.spot, at, kind, onset, at - onset, e.end - at, i))
+                alerted.add(i)
         return out
