@@ -55,18 +55,20 @@ def brightness_features(bgr: np.ndarray) -> dict:
     dark_channel = float(bgr.min(axis=2).mean())
     sat_mean = float(cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[..., 1].mean())
 
-    # 비 지표: 방향성 그래디언트 이방성 (빗줄기는 한 방향으로 정렬 → 방향 히스토그램 피크)
-    gx = cv2.Sobel(y, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(y, cv2.CV_32F, 0, 1, ksize=3)
-    omag = np.sqrt(gx * gx + gy * gy)
-    ori = np.arctan2(gy, gx) % np.pi                     # 무향 선분 → [0,π)
-    oh, _ = np.histogram(ori, bins=18, range=(0, np.pi), weights=omag)
-    oh = oh / (oh.sum() + 1e-6)
-    grad_aniso = float(oh.max() - oh.mean())             # 방향 피크(이방성) → 비
-
     # 눈 지표: 작은 밝은 점 밀도 (white top-hat = 원본 − 열림 → 작은 고휘도 반점)
     _ker = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     speckle = float(cv2.morphologyEx(y, cv2.MORPH_TOPHAT, _ker).mean())
+
+    # 비 vs 눈 (★각도-불변): 고주파 잔차의 구조텐서 응집도.
+    # 빗줄기=국소 정렬(고응집) / 눈송이=등방(저응집). 빗줄기 '각도'에 불변이라 OOD에서도
+    # 일반화(과적합 감사: streak_coh 제거 시 비 OOD 1.00→0.83 — 필수 피처).
+    hp = y - cv2.GaussianBlur(y, (0, 0), 3.0)
+    hgx = cv2.Sobel(hp, cv2.CV_32F, 1, 0, ksize=3)
+    hgy = cv2.Sobel(hp, cv2.CV_32F, 0, 1, ksize=3)
+    Jxx = cv2.GaussianBlur(hgx * hgx, (0, 0), 2.0)
+    Jyy = cv2.GaussianBlur(hgy * hgy, (0, 0), 2.0)
+    Jxy = cv2.GaussianBlur(hgx * hgy, (0, 0), 2.0)
+    streak_coh = float(np.mean(np.sqrt((Jxx - Jyy) ** 2 + 4 * Jxy ** 2) / (Jxx + Jyy + 1e-3)))
 
     return dict(mean=float(flat.mean()), std=float(flat.std()),
                 p05=float(p05), p50=float(p50), p95=float(p95),
@@ -74,12 +76,12 @@ def brightness_features(bgr: np.ndarray) -> dict:
                 center=center, border=border, backlit=border - center,
                 lap_var=lap_var, glare_blob=glare_blob,
                 dark_channel=dark_channel, sat_mean=sat_mean,
-                grad_aniso=grad_aniso, speckle=speckle)
+                speckle=speckle, streak_coh=streak_coh)
 
 
 FEATURE_ORDER = ["mean", "std", "p05", "p50", "p95", "sat_hi", "sat_lo",
                  "dyn_range", "backlit", "lap_var", "glare_blob",
-                 "dark_channel", "sat_mean", "grad_aniso", "speckle"]
+                 "dark_channel", "sat_mean", "speckle", "streak_coh"]
 
 
 def feature_vector(feats: dict) -> np.ndarray:
