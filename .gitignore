@@ -1,0 +1,20 @@
+# 데이터·모델·런타임 산출물 (용량 큼 / 재생성 가능)
+data/
+*.pt
+*.onnx
+*.joblib
+
+# 파이썬
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# figs는 README 참조용으로 커밋 유지
+!figs/
