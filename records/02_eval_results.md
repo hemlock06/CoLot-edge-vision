@@ -78,6 +78,21 @@ OCR 종단(EasyOCR ko): 클라우드 char 0.913, 엣지(INT8) char 0.895. 도식
 (이전 '비77→90·눈77→93'은 프레임마다 새 악천후를 줘 오류 독립성을 과대평가한 값 — 폐기.)
 도식: `figs/voting.png`
 
+## ★ 실데이터 검증 (합성→실, HF keremberke ALPR 실 번호판 400장)
+합성으로 학습/구성한 파이프라인을 **실 차량·번호판 이미지**에 적용해 정직 측정:
+
+| 항목 | 결과 | 해석 |
+|---|---|---|
+| **EasyOCR 실 판독율** | **87%** (≥4자, 예 `하003593`·`45구2011`) | 실-학습 OCR(CRAFT)은 실 데이터 전이 ✅ |
+| ① 합성 검출기 → 실 (mAP50) | **0.294** | 합성→실 **도메인 갭**(예상) |
+| **① 합성→실 fine-tune (전이) (mAP50)** | **0.950** | 실 데이터로 적응 → **검출기 실작동** ✅ |
+| 대조: 실 scratch (mAP50) | 0.968 | 합성 사전학습 ≈ scratch — 실 340장이면 충분 |
+| ③ 환경분류 → 실 photo | 분포 부정확(rain 과다) | 실-환경 GT 없음 + 합성→실 전이 약함(정직 한계) |
+
+→ **OCR은 실 전이 / 검출기는 실 fine-tune으로 mAP50 0.95 달성**(파이프라인 실작동 입증).
+합성 사전학습이 scratch 대비 이득은 작음(합성-실 도메인 거리). 산출: `data/real_finetune.json`,
+`data/real_metrics.json`, 몽타주 `figs/real_validation.png`. 스크립트: `scripts/eval_real.py`·`finetune_real.py`
+
 ## ② 불법주차 이상탐지 (test=800)
 
 | 구성 | Precision | Recall | F1 |
