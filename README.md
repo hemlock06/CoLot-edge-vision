@@ -1,0 +1,133 @@
+# 코랏 스마트 카스토퍼 엣지-비전 파이프라인 (Project 3)
+
+## 개요
+
+코랏(CoLot) 무인 주차관제 **스마트 카스토퍼**가 수행한 엣지-비전 처리를,
+한 디바이스의 입출차 1회 흐름으로 재현한 **공개/합성 데이터 기반 레퍼런스 구현**.
+세 모듈이 한 파이프라인으로 결합된다.
+
+```
+프레임 도착
+  → ③ 휘도·악천후 환경적응 ─ 센싱 모드(RGB/IR/보정/절전) · 추론 여부 결정
+       → (추론 시) ① 번호판 검출 + OCR ─ 온디바이스 경량화
+  → 출차 시 점유 세션 × 예약/결제 원장
+       → ② 불법주차 이상탐지 (무단 / 초과 / 센서고장)
+```
+
+> **데이터 정직성.** 원 코랏 운영 데이터는 비공개이므로, 공개 모델(YOLOv8n·EasyOCR)과
+> 합성/시뮬레이션 데이터로 *동일한 의사결정 구조*를 재현·검증한다. 모든 수치는
+> 합성 평가셋 기준이며 고정 시드로 재현 가능하다. 모델 연구가 아닌 **엣지-AI 시스템의
+> 기획·통합·검증** 역량을 보이는 것이 목적이다.
+
+---
+
+## 핵심 기여
+
+| 기여 | 내용 |
+|---|---|
+| **③ 휘도·악천후 환경적응** | 밝기 5 + 악천후 3 = **8환경** RF 분류 0.972(손룰 0.47). 모션 게이팅·IR·보정·절전 정책으로 **추론 전력 −53.9%·낭비 OCR −58.5%**, 회수가능 캡처 **100% 유지** |
+| **① 온디바이스 경량화** | YOLOv8n 합성 한글 번호판 학습 → ONNX → **정적 INT8 양자화**. 24.4→**3.4MB(7.2×↓)**, ONNX-CPU **14ms(≈GPU급)**, 검출 0.96·OCR 문자정확도 0.913→0.895 **유지** |
+| **② 불법주차 이상탐지** | 예약/결제 원장 대조 **룰(P=1.0)** + IsolationForest로 *원장 정상인 subtle 센서고장* 보강 → **센서고장 재현율 70.5→88.6** |
+| **통합·정직성** | ③→①→② 단일 엣지 파이프라인 + CLI + 데모, **pytest 26**. 합성 데이터·하드웨어 의존성·정밀도 트레이드오프를 정직하게 명시 |
+
+---
+
+## 아키텍처
+
+```
+        ┌─────────────── 카스토퍼 엣지 ───────────────┐
+프레임 →│ ③ adaptive  휘도+dark-channel+채도 → 환경분류(RF,8) → 정책 │→ mode·run_ocr
+        │     │ run_ocr=True                                          │
+        │ ① plate    letterbox → YOLOv8n(ONNX/INT8) → crop → EasyOCR │→ 번호판(+포맷검증)
+        └──────────────────┬──────────────────────────────────────────┘
+                           │ 점유 세션(start,end) + 앱 원장(예약/결제)
+        ② anomaly  룰(원장대조) ⊕ IsolationForest(센서이상) → 무단/초과/고장
+```
+
+환경 8종 — 밝기: `day_normal·low_light(→IR)·glare·backlit·overexposed` /
+악천후: `rain·fog·snow`(대비복원 `rgb_boost`).
+
+---
+
+## 결과 요약
+
+### ③ 휘도·악천후 환경적응 (`kev/adaptive.py`)
+
+| 항목 | 값 |
+|---|---|
+| 환경분류 정확도 (RandomForest, 8클래스, 누수 방지 분할) | **0.972** (손룰 0.472) |
+| 추론 전력 절감 (vs 상시 RGB) | **−53.9%** |
+| 낭비 OCR 호출 감소 | **−58.5%** |
+| 회수가능 번호판 캡처 유지율 | **100%** |
+
+악천후 OCR 영향(정책 근거): 맑음 82.5% → **눈 62.5% · 비 70.0%**(완전일치).
+![adaptive](figs/adaptive_tradeoff.png)
+
+### ① 번호판 검출 + OCR + 온디바이스 경량화 (`kev/plate.py`)
+
+| 백엔드 | 크기 | 지연(1장) | 검출율 |
+|---|---|---|---|
+| PyTorch GPU (클라우드 FP32) | 24.4 MB | 14.5 ms | 1.00 |
+| **ONNX CPU (FP32)** | 12.1 MB | **14.1 ms** | 1.00 |
+| **ONNX CPU INT8 (엣지)** | **3.4 MB** | 36.5 ms | 0.96 |
+
+GPU 없이 CPU 14ms 실시간 · 모델 7.2× 압축 · OCR 문자정확도 0.913→0.895 유지.
+*한계*: INT8 CPU 지연은 VNNI/NPU 가속이 없으면 FP32보다 빠르지 않음(이 데스크톱 기준).
+![plate](figs/plate_quant.png)
+
+### ② 불법주차 이상탐지 (`kev/anomaly.py`)
+
+| 구성 | Precision | Recall | F1 |
+|---|---|---|---|
+| 룰만 (원장 대조) | 1.000 | 0.842 | 0.914 |
+| 룰 + IsolationForest | 0.866 | 0.895 | 0.880 |
+
+유형별 재현율(룰→룰+ML): 무단점유 100→100 · 초과주차 74.0→77.9 · **센서고장 70.5→88.6**.
+![anomaly](figs/anomaly_recall.png)
+
+### 통합 데모
+![pipeline](figs/pipeline_demo.png)
+
+---
+
+## 실행
+
+```bash
+pip install -r requirements.txt        # torch는 GPU 휠 별도 권장
+
+python scripts/eval_adaptive.py        # ③ 환경분류·전력-커버리지
+python scripts/build_plate.py          # ① 학습→ONNX→INT8→벤치→OCR
+python scripts/eval_anomaly.py         # ② 이상탐지 P/R/F1
+python scripts/eval_weather_ocr.py     # 악천후 OCR 열화
+python scripts/make_gallery.py         # 합성 이미지 갤러리
+python scripts/make_viz2.py            # ③ 판단·② 데이터 시각화
+
+python -m kev.cli demo                 # ③→①→② 통합 데모
+python -m kev.cli adaptive <image.png>
+python -m kev.cli plate <image.png>
+
+pytest -q                              # 26 passed
+```
+
+## 구조
+
+```
+kev/
+  adaptive.py     ③ 휘도·악천후 환경적응 (피처·분류·센싱 정책)
+  plate.py        ① 검출·ONNX·정적 INT8·OnnxYolo·OCR
+  plate_synth.py  합성 한글 번호판·장면·조명·악천후 증강
+  anomaly.py      ② 룰 + IsolationForest 이상탐지
+  occupancy.py    점유/예약 시뮬레이터
+  pipeline.py     ③→①→② 통합
+  demo.py / cli.py / plotting.py / config.py
+scripts/          eval_adaptive · build_plate · eval_anomaly · eval_weather_ocr · make_gallery · make_viz2
+tests/            pytest (26)
+records/          설계 결정·평가·실행·이슈 기록 (decisions.md 인덱스)
+```
+
+## 역할 (정직한 범위)
+
+코랏 트리스톤 PM으로서 **문제정의·서비스 기획·번호판 인식 플로우·풀클라우드→온디바이스
+전환 의사결정**을 담당했다. 본 저장소는 그 의사결정 구조를 *직접 구현·정량 검증*한
+레퍼런스로, 모델 연구가 아닌 **엣지-AI 시스템의 기획·통합·검증** 역량을 보인다.
+설계 결정·한계는 [`decisions.md`](decisions.md) 및 [`records/`](records/) 참고.
