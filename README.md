@@ -150,10 +150,3 @@ scripts/          eval_adaptive · build_plate · eval_anomaly · eval_weather_o
 tests/            pytest (30)
 records/          설계 결정·평가·실행·이슈 기록 (decisions.md 인덱스)
 ```
-
-## 역할 (정직한 범위)
-
-코랏 트리스톤 PM으로서 **문제정의·서비스 기획·번호판 인식 플로우·풀클라우드→온디바이스
-전환 의사결정**을 담당했다. 본 저장소는 그 의사결정 구조를 *직접 구현·정량 검증*한
-레퍼런스로, 모델 연구가 아닌 **엣지-AI 시스템의 기획·통합·검증** 역량을 보인다.
-설계 결정·한계는 [`decisions.md`](decisions.md) 및 [`records/`](records/) 참고.
