@@ -21,30 +21,23 @@ SCENARIO = [
     ("normal",       "rain",        0.30, True,  "비 — 보정/다중판독"),
     ("normal",       "fog",         0.26, True,  "안개 — 대비 복원"),
     ("normal",       "snow",        0.28, True,  "눈 — 송이 가림"),
-    ("unauthorized", "day_normal",  0.33, True,  "무단주차(예약 없음)"),
-    ("overstay",     "day_normal",  0.31, True,  "결제시간 초과"),
+    ("unauthorized", "day_normal",  0.33, True,  "무단주차(미등록)"),
     ("glare",        "glare",       0.20, True,  "글레어 — 판독 곤란"),
-    ("fault_subtle", "day_normal",  0.05, True,  "센서 약고장(원장 정상)"),
+    ("fault_subtle", "day_normal",  0.05, True,  "센서 약고장(등록 정상)"),
 ]
 
 
 def _event(label: str, rng: random.Random) -> Event:
     start = rng.uniform(8 * 60, 18 * 60)
     if label == "normal":
-        dur = rng.uniform(30, 60); return Event(1, start, start + dur, True,
-                                                 start + dur * 1.3, 0, "normal")
+        dur = rng.uniform(30, 60); return Event(1, start, start + dur, True, 0, "normal")
     if label == "unauthorized":
-        dur = rng.uniform(30, 90); return Event(1, start, start + dur, False, -1, 0,
+        dur = rng.uniform(30, 90); return Event(1, start, start + dur, False, 0,
                                                  "unauthorized")
-    if label == "overstay":
-        dur = rng.uniform(60, 100); return Event(1, start, start + dur, True,
-                                                  start + dur * 0.5, 0, "overstay")
     if label == "fault_subtle":
-        dur = rng.uniform(2.5, 4.0); return Event(1, start, start + dur, True,
-                                                  start + dur * 1.4, 0, "fault")
+        dur = rng.uniform(2.5, 4.0); return Event(1, start, start + dur, True, 0, "fault")
     # glare 등: 정상 점유(이상 아님)
-    dur = rng.uniform(30, 60); return Event(1, start, start + dur, True,
-                                            start + dur * 1.3, 0, "normal")
+    dur = rng.uniform(30, 60); return Event(1, start, start + dur, True, 0, "normal")
 
 
 def default_plate_reader(gpu=False) -> PlateReader:

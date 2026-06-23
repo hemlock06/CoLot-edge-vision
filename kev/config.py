@@ -56,12 +56,18 @@ class PlateCfg:
     ocr_langs: tuple = ("ko", "en")
 
 
-# ---- ② 불법주차 이상탐지 ------------------------------------------------
+# ---- ② 불법주차 이상탐지 / 시간과금 ------------------------------------
+# 정산 모델: 회원가입·번호판 등록 차량은 주차 grace분 뒤 자동 사용시작,
+#            출차 settle초 뒤 사용시간만큼 자동 결제(선결제·예약 없음).
+#   이상 유형 = unauthorized(미등록 차량 점유) · fault(센서고장: ghost/flicker/stuck)
 @dataclass
 class AnomalyCfg:
-    overstay_grace_min: float = 10.0   # 결제시간 초과 허용(분)
+    start_grace_min: float = 1.0       # 주차 후 사용시작까지 유예(분) — 무과금
+    settle_delay_sec: float = 30.0     # 출차 후 자동 정산까지 지연(초)
     contamination: float = 0.03        # IsolationForest 오염도(오탐 억제)
-    min_occupancy_min: float = 2.0     # 이보다 짧은 점유는 노이즈
+    min_occupancy_min: float = 2.0     # 이보다 짧은 점유는 노이즈(ghost)
+    flicker_thresh: int = 20           # 센서 토글 폭주(flicker) 임계
+    stuck_min: float = 18 * 60         # 과도한 장시간 점유(stuck) 임계(분)
 
 
 SEED = 20231016  # 코랏 국방대제전 금상(23.09) 무렵 — 재현용 고정 시드

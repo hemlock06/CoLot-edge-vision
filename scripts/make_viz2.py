@@ -51,10 +51,8 @@ def adaptive_decisions():
 
 
 # ===== ② 데이터 시각화 =====
-LAB_COLOR = {"normal": "#2E8B4E", "unauthorized": "#E0962A",
-             "overstay": "#7B5EA7", "fault": "#C0392B"}
-LAB_KO = {"normal": "정상", "unauthorized": "무단점유", "overstay": "초과주차",
-          "fault": "센서고장"}
+LAB_COLOR = {"normal": "#2E8B4E", "unauthorized": "#E0962A", "fault": "#C0392B"}
+LAB_KO = {"normal": "정상", "unauthorized": "무단점유(미등록)", "fault": "센서고장"}
 
 
 def anomaly_sessions():

@@ -19,8 +19,8 @@ from kev.config import DATA, FIGS, SEED
 from kev.occupancy import simulate
 from kev.streaming import StreamingMonitor
 
-KIND_KO = {"unauthorized": "무단점유", "overstay": "초과주차", "sensor_fault": "센서고장(stuck)"}
-KIND_COL = {"unauthorized": "#E0962A", "overstay": "#7B5EA7", "sensor_fault": "#C0392B"}
+KIND_KO = {"unauthorized": "무단점유(미등록)", "sensor_fault": "센서고장(stuck)"}
+KIND_COL = {"unauthorized": "#E0962A", "sensor_fault": "#C0392B"}
 
 
 def main():

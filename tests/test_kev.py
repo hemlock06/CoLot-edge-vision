@@ -128,20 +128,19 @@ def test_onnx_detector_finds_plate():
 def test_simulate_labels():
     evs = simulate(n_events=400, seed=1)
     labs = {e.label for e in evs}
-    assert {"normal", "unauthorized", "overstay", "fault"}.issubset(labs)
+    assert {"normal", "unauthorized", "fault"}.issubset(labs)
+    assert "overstay" not in labs              # 선결제·예약 모델 폐기
     assert len(evs) == 400
 
 
 def test_rule_catches_violations():
     det = ParkingAnomalyDetector()
-    # 무단(예약 없음)
-    assert det.rule(Event(1, 0, 40, False, -1, 0, "unauthorized")) == "unauthorized"
-    # 초과(결제시간 초과)
-    assert det.rule(Event(1, 0, 100, True, 40, 0, "overstay")) == "overstay"
+    # 무단(미등록 차량)
+    assert det.rule(Event(1, 0, 40, False, 0, "unauthorized")) == "unauthorized"
     # 명백 고장(flicker)
-    assert det.rule(Event(1, 0, 30, True, 100, 40, "fault")) == "sensor_fault"
-    # 정상
-    assert det.rule(Event(1, 0, 40, True, 80, 0, "normal")) is None
+    assert det.rule(Event(1, 0, 30, True, 40, "fault")) == "sensor_fault"
+    # 정상(등록 차량)
+    assert det.rule(Event(1, 0, 40, True, 0, "normal")) is None
 
 
 def test_detector_fit_predict():
@@ -150,12 +149,12 @@ def test_detector_fit_predict():
     det = ParkingAnomalyDetector().fit(normal)
     flags = det.predict(evs[:100])
     assert len(flags) == 100
-    assert all(f.pred in {"normal", "unauthorized", "overstay", "fault", "anomaly"}
+    assert all(f.pred in {"normal", "unauthorized", "fault", "anomaly"}
                for f in flags)
 
 
 def test_features_dim():
-    e = Event(1, 0, 40, True, 80, 0, "normal")
+    e = Event(1, 0, 40, True, 0, "normal")
     assert len(features(e)) == len(FEATS)
 
 
@@ -183,27 +182,29 @@ def test_vote_chars_majority():
 def test_streaming_early_alert():
     from kev.streaming import StreamingMonitor
     mon = StreamingMonitor()
-    # 무단점유: 미예약, 100분 점유 → 주차 중 경보(시간<end, lead>0)
-    a = mon.alert_for(Event(3, 0, 100, False, -1, 0, "unauthorized"), 0)
+    # 무단점유: 미등록, 100분 점유 → 주차 중 경보(시간<end, lead>0)
+    a = mon.alert_for(Event(3, 0, 100, False, 0, "unauthorized"), 0)
     assert a is not None and a.kind == "unauthorized"
     assert a.time < 100 and a.lead > 0 and a.delay == mon.unauth_grace
-    # 초과주차: 결제 40, 점유 100 → overstay 경보
-    b = mon.alert_for(Event(3, 0, 100, True, 40, 0, "overstay"), 1)
-    assert b is not None and b.kind == "overstay" and b.lead > 0
+    # 등록 정상 차량: 경보 없음
+    b = mon.alert_for(Event(3, 0, 100, True, 0, "normal"), 1)
+    assert b is None
 
 
 # ---- #4 분단위 정산 ----
 def test_billing_settle():
     from kev.billing import settle, RATE, PENALTY
-    # 정상 7분 → 분단위 = 7*RATE, 블록 대비 절감
-    r = settle(Event(1, 0, 7, True, 30, 0, "normal"), "12가3456")
-    assert r.amount == 7 * RATE and r.saving > 0 and r.status == "정산완료"
-    # 무단 → 과태료
-    u = settle(Event(1, 0, 50, False, -1, 0, "unauthorized"), "12가3456")
+    from kev.config import AnomalyCfg
+    g = AnomalyCfg().start_grace_min        # 사용시작 유예(분)
+    # 정상 7분 점유 → 과금=(7−grace)*RATE, 블록 대비 절감
+    r = settle(Event(1, 0, 7, True, 0, "normal"), "12가3456")
+    assert r.amount == (7 - g) * RATE and r.saving > 0 and r.status == "정산완료"
+    # 장시간 95분 정상 → 사용시간 과금
+    r2 = settle(Event(1, 0, 95, True, 0, "normal"), "12가3456")
+    assert r2.amount == (95 - g) * RATE and r2.surcharge == 0
+    # 무단(미등록) → 과태료
+    u = settle(Event(1, 0, 50, False, 0, "unauthorized"), "12가3456")
     assert u.penalty == PENALTY and u.amount == PENALTY
-    # 초과 → 할증
-    o = settle(Event(1, 0, 80, True, 40, 0, "overstay"), "12가3456")
-    assert o.surcharge > 0 and o.amount > 80 * RATE
 
 
 # ---- 재검증 보강: 순환성·자기충족·스트리밍 반박 회귀 ----

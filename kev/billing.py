@@ -1,10 +1,11 @@
-"""#4 분단위 정산 e2e — AI를 제품/사업에 연결.
+"""#4 시간 정산 e2e — AI를 제품/사업에 연결.
 
-코랏의 PM 차별점은 경쟁사의 *30분 블록 과금* 대비 **분 단위 정산**(가격경쟁력).
-입차→점유(센서)→번호판(①)→출차→분단위 요금 산출까지 한 흐름으로 연결한다.
-  - 정상     : 점유 분 × 분당요금
-  - 초과주차 : 결제분 + 초과분 할증(②/스트리밍 연계)
-  - 무단점유 : 미정산 + 과태료 플래그
+코랏의 PM 차별점은 경쟁사의 *30분 블록 과금* 대비 **사용시간 분단위 정산**(가격경쟁력).
+회원·번호판 등록 차량은 예약·선결제 없이, 주차 grace분 뒤 자동 사용시작 →
+출차 settle초 뒤 사용시간만큼 자동 결제된다.
+입차→점유(센서)→번호판(①)→출차→사용시간 요금 산출까지 한 흐름으로 연결한다.
+  - 정상(등록) : (점유분 − 사용시작 유예) × 분당요금, 자동 결제
+  - 무단(미등록): 미정산 + 과태료 플래그(②/스트리밍 연계)
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -14,8 +15,7 @@ from .occupancy import Event
 
 RATE = 40                 # 원/분 (KU 사업계획서: 30분 1,200원 → 40원/분)
 BLOCK_MIN, BLOCK_FEE = 30, 1200   # 경쟁사 30분 블록 과금
-SURCHARGE = 1.5           # 초과주차 할증
-PENALTY = 40000           # 무단주차 과태료(예시)
+PENALTY = 40000           # 미등록 무단주차 과태료(예시)
 
 
 @dataclass
@@ -38,21 +38,17 @@ class Receipt:
 
 
 def settle(e: Event, plate: str, rate: int = RATE,
-           grace: float = AnomalyCfg().overstay_grace_min) -> Receipt:
+           grace: float = AnomalyCfg().start_grace_min) -> Receipt:
     dur = max(0.0, e.end - e.start)
     minutes = math.ceil(dur)
     block_fee = math.ceil(dur / BLOCK_MIN) * BLOCK_FEE
     plate = plate or "미인식"
 
-    if not e.reserved:                                   # 무단점유
+    if not e.registered:                                 # 미등록 무단점유
         return Receipt(e.spot, plate, minutes, 0, block_fee, 0, 0, PENALTY,
-                       PENALTY, "무단(미정산·과태료)")
+                       PENALTY, "무단(미등록·과태료)")
 
-    paid_min = max(0.0, e.paid_end - e.start) if e.paid_end > 0 else dur
-    over = max(0.0, dur - paid_min)
-    base = math.ceil(min(dur, paid_min)) * rate
-    surcharge = math.ceil(over) * int(rate * SURCHARGE) if over > grace else 0
-    amount = base + surcharge
-    status = "초과정산(할증)" if surcharge > 0 else "정산완료"
+    billable = max(0.0, dur - grace)                     # 사용시작 = 주차 grace분 뒤
+    base = math.ceil(billable) * rate
     return Receipt(e.spot, plate, minutes, base, block_fee,
-                   max(0, block_fee - base), surcharge, 0, amount, status)
+                   max(0, block_fee - base), 0, 0, base, "정산완료")

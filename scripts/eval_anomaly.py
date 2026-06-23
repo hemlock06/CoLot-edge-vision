@@ -1,6 +1,6 @@
 """② 불법주차 이상탐지 평가.
   - 이진 이상탐지: precision/recall/F1  (룰 only vs 룰+IForest)
-  - 유형별 재현율: unauthorized / overstay / fault
+  - 유형별 재현율: unauthorized(미등록) / fault(센서고장)
   - 혼동행렬, IForest 점수 분포
 산출: data/anomaly_metrics.json, figs/anomaly_recall.png, figs/anomaly_confusion.png
 """
@@ -19,8 +19,8 @@ from kev.config import DATA, FIGS, SEED, AnomalyCfg
 from kev.occupancy import simulate
 from kev.anomaly import ParkingAnomalyDetector, features
 
-TYPES = ["unauthorized", "overstay", "fault"]
-PRED_LABELS = ["normal", "unauthorized", "overstay", "fault", "anomaly"]
+TYPES = ["unauthorized", "fault"]
+PRED_LABELS = ["normal", "unauthorized", "fault", "anomaly"]
 
 
 def binary(y_true_lab, preds):
@@ -64,11 +64,10 @@ def main():
         n_test=len(test),
         n_anom=int(sum(l != "normal" for l in y)),
     )
-    # 초과주차 위반 크기(평균) — 잡은 것 기준
-    over = [(e.end - e.paid_end) for e, p in zip(test, pred_ml)
-            if e.label == "overstay" and p != "normal"]
-    res["overstay_mean_violation_min"] = float(np.mean(over)) if over else None
-    res["overstay_alert_latency_min"] = AnomalyCfg().overstay_grace_min
+    # 무단(미등록) 점유 평균 체류분 — 잡은 것 기준
+    unauth = [(e.end - e.start) for e, p in zip(test, pred_ml)
+              if e.label == "unauthorized" and p != "normal"]
+    res["unauthorized_mean_dwell_min"] = float(np.mean(unauth)) if unauth else None
 
     # ── A2: 비설계 랜덤고장 견고성 (자기충족 ablation 반박) ──
     evs_r = simulate(n_events=1600, seed=SEED, random_faults=True)
@@ -95,7 +94,7 @@ def main():
     for i, (a, b) in enumerate(zip(rr, rm)):
         ax.text(i - w/2, a, f"{a:.0f}", ha="center", va="bottom", fontsize=8)
         ax.text(i + w/2, b, f"{b:.0f}", ha="center", va="bottom", fontsize=8)
-    ax.set_xticks(x); ax.set_xticklabels(["무단점유", "초과주차", "센서고장"])
+    ax.set_xticks(x); ax.set_xticklabels(["무단점유(미등록)", "센서고장"])
     ax.set_ylim(0, 108); ax.set_ylabel("재현율 (%)"); ax.legend()
     ax.set_title("유형별 이상 재현율 — ML이 센서고장을 보강")
     fig.tight_layout(); fig.savefig(FIGS / "anomaly_recall.png", dpi=130); plt.close(fig)
@@ -127,7 +126,7 @@ def main():
     for t in TYPES:
         print(f"  {t:12s} {res['recall_rule'][t]*100:5.1f}% → {res['recall_ml'][t]*100:5.1f}%")
     print(f"test={res['n_test']} anomalies={res['n_anom']} "
-          f"overstay위반평균={res['overstay_mean_violation_min']}")
+          f"무단평균체류={res['unauthorized_mean_dwell_min']}")
     rf = res["random_fault"]
     print("=== A2: 비설계 랜덤고장 (자기충족 반박) ===")
     print(f"  룰만      P={rf['rule_only']['precision']:.3f} R={rf['rule_only']['recall']:.3f} F1={rf['rule_only']['f1']:.3f}")
