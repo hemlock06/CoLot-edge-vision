@@ -1,0 +1,56 @@
+# CoLot-edge CI — 인수인계용 경량 계약 테스트
+#
+# 설계 의도(docs/HANDOFF_ISSUES.md P0-3/P0-4, P1-4 참조):
+#   - 합성 번호판 렌더(kev/plate_synth)는 Windows 폰트 경로에 의존 → 리눅스 러너에서 실패.
+#   - 풀 의존성(torch/ultralytics/easyocr)은 수백 MB~GB → CI 부적합.
+#   따라서 CI는 폰트·중량모델 비의존 "계약 테스트"(tests/test_contracts.py)만
+#   경량 의존성으로 안정 실행한다. 전체 35-test 스위트(tests/test_kev.py)는
+#   Windows + 모델 재생성(scripts/) 환경에서 로컬/별도 러너로 수행한다(아래 windows-full 잡, 수동).
+#
+# import kev 는 repo 루트가 cwd 여야 하므로(패키징 부재, P0-4) `python -m pytest`를 루트에서 실행한다.
+
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  contracts:
+    name: 계약 테스트 (Ubuntu, 경량)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 경량 의존성 설치 (폰트·중량모델 비의존)
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy scikit-learn opencv-python-headless pillow joblib pytest
+
+      - name: 계약/불변식 테스트
+        run: python -m pytest tests/test_contracts.py -q
+
+  # 전체 스위트는 Windows 폰트 + 재생성 모델(scripts/)이 있어야 35 passed.
+  # 기본 비활성(수동 실행). 모델 산출물은 .gitignore 라 별도 캐시/생성 단계가 필요하다.
+  windows-full:
+    name: 전체 스위트 (Windows, 수동)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 전체 의존성 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: pytest (모델 의존 테스트는 산출물 없으면 자동 skip)
+        run: python -m pytest -q
