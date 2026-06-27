@@ -6,6 +6,7 @@
        → (추론 시) ① 검출+OCR → 번호판
     → 출차 시 점유 세션 + 회원 등록 원장 → ② 이상 판정(무단/센서고장)
 """
+
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
@@ -25,7 +26,7 @@ class Record:
     power: float
     plate: str | None
     plate_valid: bool
-    anomaly: str | None         # 출차 시 채워짐
+    anomaly: str | None  # 출차 시 채워짐
 
 
 class CoLotEdgePipeline:
@@ -42,8 +43,15 @@ class CoLotEdgePipeline:
             if reads:
                 best = max(reads, key=lambda r: r["conf"])
                 plate, valid = best["text"], best["valid"]
-        return Record(env=d.env, mode=d.mode, run_ocr=d.run_ocr, power=d.power,
-                      plate=plate, plate_valid=valid, anomaly=None)
+        return Record(
+            env=d.env,
+            mode=d.mode,
+            run_ocr=d.run_ocr,
+            power=d.power,
+            plate=plate,
+            plate_valid=valid,
+            anomaly=None,
+        )
 
     def on_exit(self, rec: Record, event: Event) -> Record:
         if self.anom is not None:

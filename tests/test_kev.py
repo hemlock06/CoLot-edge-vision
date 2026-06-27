@@ -1,14 +1,26 @@
 """kev 단위 테스트 — 학습/ocr 없이 빠르게 도는 핵심 검증."""
+
 import re
 import random
 import numpy as np
 import pytest
 
 from kev.config import PLATE_RE, ENVS, WEATHER_ENVS, DATA
-from kev.plate_synth import (render_plate, random_plate_text, make_scene, relight,
-                             add_weather, apply_env)
-from kev.adaptive import (brightness_features, FEATURE_ORDER, feature_vector,
-                          readability, AdaptiveSensor)
+from kev.plate_synth import (
+    render_plate,
+    random_plate_text,
+    make_scene,
+    relight,
+    add_weather,
+    apply_env,
+)
+from kev.adaptive import (
+    brightness_features,
+    FEATURE_ORDER,
+    feature_vector,
+    readability,
+    AdaptiveSensor,
+)
 from kev.plate import preprocess, char_accuracy
 from kev.occupancy import simulate, Event
 from kev.anomaly import ParkingAnomalyDetector, features, FEATS
@@ -38,7 +50,9 @@ def test_make_scene_bbox_in_bounds():
 # ---- ③ adaptive ----
 def test_brightness_features_keys():
     f = brightness_features(make_scene("12가3456", rng)[0])
-    assert set(FEATURE_ORDER).issubset(f) and len(feature_vector(f)) == len(FEATURE_ORDER)
+    assert set(FEATURE_ORDER).issubset(f) and len(feature_vector(f)) == len(
+        FEATURE_ORDER
+    )
 
 
 def test_relight_changes_brightness():
@@ -66,11 +80,12 @@ def test_fog_raises_dark_channel():
     scene = make_scene("12가3456", rng)[0]
     base = brightness_features(scene)["dark_channel"]
     fog = brightness_features(add_weather(scene, "fog", rng))["dark_channel"]
-    assert fog > base                       # 안개는 dark-channel을 높임(haze)
+    assert fog > base  # 안개는 dark-channel을 높임(haze)
 
 
 def test_adaptive_classifies_weather():
     import joblib
+
     p = DATA / "adaptive_clf.joblib"
     if not p.exists():
         pytest.skip("분류기 없음 (scripts/eval_adaptive.py 먼저)")
@@ -81,7 +96,7 @@ def test_adaptive_classifies_weather():
         for _ in range(5):
             img = add_weather(make_scene(random_plate_text(prng), rng)[0], w, rng)
             hit += sensor.step(img, motion=0.3).env == w
-    assert hit >= 11        # 15개 중 11+ (악천후 분류 동작)
+    assert hit >= 11  # 15개 중 11+ (악천후 분류 동작)
 
 
 def test_adaptive_skip_on_no_motion():
@@ -98,7 +113,7 @@ def test_preprocess_shape():
 
 def test_char_accuracy():
     assert char_accuracy("12가3456", "12가3456") == 1.0
-    assert char_accuracy("12가3456", "12가3457") == pytest.approx(6/7, abs=1e-6)
+    assert char_accuracy("12가3456", "12가3457") == pytest.approx(6 / 7, abs=1e-6)
     assert char_accuracy("", "12가3456") == 0.0
 
 
@@ -111,9 +126,10 @@ def test_onnx_detector_finds_plate():
     def iou(a, b):
         ix0, iy0 = max(a[0], b[0]), max(a[1], b[1])
         ix1, iy1 = min(a[2], b[2]), min(a[3], b[3])
-        inter = max(0, ix1-ix0) * max(0, iy1-iy0)
-        ua = (a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter
-        return inter/ua if ua > 0 else 0
+        inter = max(0, ix1 - ix0) * max(0, iy1 - iy0)
+        ua = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+        return inter / ua if ua > 0 else 0
+
     det = OnnxYolo(int8, imgsz=320)
     hit = 0
     for _ in range(8):
@@ -121,7 +137,7 @@ def test_onnx_detector_finds_plate():
         dets = det.detect(scene)
         if dets and max(iou(d[0], gt) for d in dets) >= 0.5:
             hit += 1
-    assert hit >= 6        # 8개 중 6개 이상 검출
+    assert hit >= 6  # 8개 중 6개 이상 검출
 
 
 # ---- ② anomaly ----
@@ -129,7 +145,7 @@ def test_simulate_labels():
     evs = simulate(n_events=400, seed=1)
     labs = {e.label for e in evs}
     assert {"normal", "unauthorized", "fault"}.issubset(labs)
-    assert "overstay" not in labs              # 선결제·예약 모델 폐기
+    assert "overstay" not in labs  # 선결제·예약 모델 폐기
     assert len(evs) == 400
 
 
@@ -149,8 +165,7 @@ def test_detector_fit_predict():
     det = ParkingAnomalyDetector().fit(normal)
     flags = det.predict(evs[:100])
     assert len(flags) == 100
-    assert all(f.pred in {"normal", "unauthorized", "fault", "anomaly"}
-               for f in flags)
+    assert all(f.pred in {"normal", "unauthorized", "fault", "anomaly"} for f in flags)
 
 
 def test_features_dim():
@@ -161,15 +176,17 @@ def test_features_dim():
 # ---- #3 OCR 교정 ----
 def test_correct_plate():
     from kev.plate import correct_plate
+
     assert correct_plate("12가3456") == ("12가3456", True)
-    assert correct_plate("1 2가 3456") == ("12가3456", True)   # 공백 제거
-    assert correct_plate("12O3456")[1] is False                # 한글 없음 → invalid
-    assert correct_plate("12가34I6")[0] == "12가3416"          # I→1 교정
+    assert correct_plate("1 2가 3456") == ("12가3456", True)  # 공백 제거
+    assert correct_plate("12O3456")[1] is False  # 한글 없음 → invalid
+    assert correct_plate("12가34I6")[0] == "12가3416"  # I→1 교정
 
 
 # ---- #1 다중프레임 투표 ----
 def test_vote_chars_majority():
     from kev.tracking import vote_chars, PlateVoter
+
     text, agree = vote_chars(["12가3456", "12가3456", "12가3457"])
     assert text == "12가3456" and agree > 0.9
     v = PlateVoter()
@@ -181,6 +198,7 @@ def test_vote_chars_majority():
 # ---- #2 실시간 조기 경보 ----
 def test_streaming_early_alert():
     from kev.streaming import StreamingMonitor
+
     mon = StreamingMonitor()
     # 무단점유: 미등록, 100분 점유 → 주차 중 경보(시간<end, lead>0)
     a = mon.alert_for(Event(3, 0, 100, False, 0, "unauthorized"), 0)
@@ -195,7 +213,8 @@ def test_streaming_early_alert():
 def test_billing_settle():
     from kev.billing import settle, RATE, PENALTY
     from kev.config import AnomalyCfg
-    g = AnomalyCfg().start_grace_min        # 사용시작 유예(분)
+
+    g = AnomalyCfg().start_grace_min  # 사용시작 유예(분)
     # 정상 7분 점유 → 과금=(7−grace)*RATE, 블록 대비 절감
     r = settle(Event(1, 0, 7, True, 0, "normal"), "12가3456")
     assert r.amount == (7 - g) * RATE and r.saving > 0 and r.status == "정산완료"
@@ -221,26 +240,39 @@ def test_adaptive_ood_generalizes():
     from sklearn.metrics import accuracy_score
 
     def gen(n, seed, variant):
-        g = np.random.default_rng(seed); p = random.Random(seed); X, y = [], []
+        g = np.random.default_rng(seed)
+        p = random.Random(seed)
+        X, y = [], []
         for _ in range(n):
             sc = make_scene(random_plate_text(p), g)[0]
             for env in ENVS:
                 img = apply_env(sc, env, g, variant=variant)
-                X.append(feature_vector(brightness_features(img))); y.append(env)
+                X.append(feature_vector(brightness_features(img)))
+                y.append(env)
         return np.array(X, np.float32), np.array(y)
-    Xa, ya = gen(24, 1, "A"); Xb, yb = gen(12, 2, "B")
-    clf = RandomForestClassifier(n_estimators=120, max_depth=10, random_state=0).fit(Xa, ya)
+
+    Xa, ya = gen(24, 1, "A")
+    Xb, yb = gen(12, 2, "B")
+    clf = RandomForestClassifier(n_estimators=120, max_depth=10, random_state=0).fit(
+        Xa, ya
+    )
     assert accuracy_score(yb, clf.predict(Xb)) >= 0.80
 
 
 def test_random_faults_ml_helps():
     """비설계 랜덤고장에서도 ML이 룰보다 센서고장 재현율 높음 (자기충족 반박)."""
     from kev.anomaly import ParkingAnomalyDetector
+
     evs = simulate(n_events=1200, seed=3, random_faults=True)
-    cut = len(evs) // 2; tr, te = evs[:cut], evs[cut:]
+    cut = len(evs) // 2
+    tr, te = evs[:cut], evs[cut:]
     rp = [f.pred for f in ParkingAnomalyDetector().predict(te)]
-    mp = [f.pred for f in ParkingAnomalyDetector().fit(
-        [e for e in tr if e.label == "normal"]).predict(te)]
+    mp = [
+        f.pred
+        for f in ParkingAnomalyDetector()
+        .fit([e for e in tr if e.label == "normal"])
+        .predict(te)
+    ]
     fidx = [i for i, e in enumerate(te) if e.label == "fault"]
     rr = np.mean([rp[i] != "normal" for i in fidx])
     rm = np.mean([mp[i] != "normal" for i in fidx])
@@ -250,6 +282,7 @@ def test_random_faults_ml_helps():
 def test_streaming_alerts_in_occupancy():
     """모든 경보가 주차 중(출차 전) 발생 + 지연≥0."""
     from kev.streaming import StreamingMonitor
+
     alerts = StreamingMonitor().run(simulate(n_events=600, seed=4))
     assert alerts and all(a.lead > 0 and a.delay >= 0 for a in alerts)
 
@@ -278,4 +311,4 @@ def test_plate_reader_reads_synthetic():
             assert {"bbox", "conf", "text", "raw", "valid"} <= set(r)
         best = max(res, key=lambda r: r["conf"]) if res else None
         accs.append(char_accuracy(best["text"], gt) if best else 0.0)
-    assert np.mean(accs) >= 0.6        # 합성 번호판 판독(관측 1.0, 여유 임계)
+    assert np.mean(accs) >= 0.6  # 합성 번호판 판독(관측 1.0, 여유 임계)

@@ -8,6 +8,7 @@
 조기 탐지 가능: 무단점유(미등록) · stuck 고장(과도한 장시간).
 세션 종료 시에만 판정 가능: ghost(초단시간)·flicker — 배치(②)가 담당(상보적).
 """
+
 from __future__ import annotations
 from dataclasses import dataclass
 from .config import AnomalyCfg
@@ -17,36 +18,40 @@ from .occupancy import Event
 @dataclass
 class Alert:
     spot: int
-    time: float          # 경보 발생 시각(분)
-    kind: str            # unauthorized / sensor_fault
-    onset: float         # 위반 시작 시각
-    delay: float         # 탐지 지연 = time - onset
-    lead: float          # 선행시간 = 출차 - 경보 (차량이 아직 있는 동안의 여유)
+    time: float  # 경보 발생 시각(분)
+    kind: str  # unauthorized / sensor_fault
+    onset: float  # 위반 시작 시각
+    delay: float  # 탐지 지연 = time - onset
+    lead: float  # 선행시간 = 출차 - 경보 (차량이 아직 있는 동안의 여유)
     event_idx: int
 
 
 class StreamingMonitor:
     """분 단위 점유 스트림에서 위반 발생 즉시 경보."""
 
-    def __init__(self, cfg: AnomalyCfg = AnomalyCfg(), unauth_grace: float = 3.0,
-                 stuck_min: float = 18 * 60):
+    def __init__(
+        self,
+        cfg: AnomalyCfg = AnomalyCfg(),
+        unauth_grace: float = 3.0,
+        stuck_min: float = 18 * 60,
+    ):
         self.cfg = cfg
-        self.unauth_grace = unauth_grace      # 미등록 점유 확인 지연(번호판 조회 랙)
+        self.unauth_grace = unauth_grace  # 미등록 점유 확인 지연(번호판 조회 랙)
         self.stuck_min = stuck_min
 
     def alert_for(self, e: Event, idx: int) -> Alert | None:
         """차량 점유 중 발생하는 가장 이른 경보(없으면 None)."""
         cands = []
-        if not e.registered:                                # 미등록 무단점유
+        if not e.registered:  # 미등록 무단점유
             at = e.start + self.unauth_grace
             if at < e.end:
                 cands.append(("unauthorized", at, e.start))
-        at = e.start + self.stuck_min                       # stuck 고장
+        at = e.start + self.stuck_min  # stuck 고장
         if at < e.end:
             cands.append(("sensor_fault", at, e.start))
         if not cands:
             return None
-        kind, at, onset = min(cands, key=lambda c: c[1])    # 가장 이른 위반
+        kind, at, onset = min(cands, key=lambda c: c[1])  # 가장 이른 위반
         return Alert(e.spot, at, kind, onset, at - onset, e.end - at, idx)
 
     def run(self, events: list[Event]) -> list[Alert]:
@@ -57,13 +62,13 @@ class StreamingMonitor:
             if not e.registered:
                 cands.append((e.start + self.unauth_grace, i, "unauthorized", e.start))
             cands.append((e.start + self.stuck_min, i, "sensor_fault", e.start))
-        cands.sort(key=lambda c: c[0])               # 시간순 스트림
+        cands.sort(key=lambda c: c[0])  # 시간순 스트림
         alerted, out = set(), []
         for at, i, kind, onset in cands:
             if i in alerted:
                 continue
             e = events[i]
-            if e.start <= at < e.end:                 # 점유 활성 중에만 경보
+            if e.start <= at < e.end:  # 점유 활성 중에만 경보
                 out.append(Alert(e.spot, at, kind, onset, at - onset, e.end - at, i))
                 alerted.add(i)
         return out

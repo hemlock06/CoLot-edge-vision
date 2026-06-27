@@ -1,4 +1,5 @@
 """공용 상수·경로·설정."""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,19 +33,21 @@ OCR_COST = 0.80
 
 @dataclass
 class AdaptiveCfg:
-    glare_sat_hi: float = 0.18      # 과포화 화소 비율 임계 (글레어)
-    dark_p95: float = 70.0          # 상위 5% 밝기가 이만큼 낮으면 저조도
-    over_mean: float = 205.0        # 평균 밝기 과노출 임계
-    backlit_split: float = 95.0     # 중앙-주변 밝기 격차 (역광)
-    motion_skip: float = 0.012      # 활동도(모션) 이 값 미만이면 절전 후보
-    readable_min: float = 0.45      # 판독가능성 추정 하한 (OCR 시도 여부)
-    fog_dark: float = 140.0         # 안개 dark-channel 임계
-    fog_dyn: float = 85.0           # 안개 동적범위 상한
+    glare_sat_hi: float = 0.18  # 과포화 화소 비율 임계 (글레어)
+    dark_p95: float = 70.0  # 상위 5% 밝기가 이만큼 낮으면 저조도
+    over_mean: float = 205.0  # 평균 밝기 과노출 임계
+    backlit_split: float = 95.0  # 중앙-주변 밝기 격차 (역광)
+    motion_skip: float = 0.012  # 활동도(모션) 이 값 미만이면 절전 후보
+    readable_min: float = 0.45  # 판독가능성 추정 하한 (OCR 시도 여부)
+    fog_dark: float = 140.0  # 안개 dark-channel 임계
+    fog_dyn: float = 85.0  # 안개 동적범위 상한
 
 
 # ---- ① 번호판 -----------------------------------------------------------
 # 한국 번호판: 2~3자리 숫자 + 한글 1 + 4자리 숫자  예) 12가3456 / 123가4567
-PLATE_HANGUL = list("가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주바사아자하허호배")
+PLATE_HANGUL = list(
+    "가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주바사아자하허호배"
+)
 PLATE_RE = r"^\d{2,3}[가-힣]\d{4}$"
 
 
@@ -52,7 +55,7 @@ PLATE_RE = r"^\d{2,3}[가-힣]\d{4}$"
 class PlateCfg:
     img_w: int = 520
     img_h: int = 110
-    det_imgsz: int = 320            # 엣지 검출 입력 해상도
+    det_imgsz: int = 320  # 엣지 검출 입력 해상도
     ocr_langs: tuple = ("ko", "en")
 
 
@@ -62,12 +65,12 @@ class PlateCfg:
 #   이상 유형 = unauthorized(미등록 차량 점유) · fault(센서고장: ghost/flicker/stuck)
 @dataclass
 class AnomalyCfg:
-    start_grace_min: float = 1.0       # 주차 후 사용시작까지 유예(분) — 무과금
-    settle_delay_sec: float = 30.0     # 출차 후 자동 정산까지 지연(초)
-    contamination: float = 0.03        # IsolationForest 오염도(오탐 억제)
-    min_occupancy_min: float = 2.0     # 이보다 짧은 점유는 노이즈(ghost)
-    flicker_thresh: int = 20           # 센서 토글 폭주(flicker) 임계
-    stuck_min: float = 18 * 60         # 과도한 장시간 점유(stuck) 임계(분)
+    start_grace_min: float = 1.0  # 주차 후 사용시작까지 유예(분) — 무과금
+    settle_delay_sec: float = 30.0  # 출차 후 자동 정산까지 지연(초)
+    contamination: float = 0.03  # IsolationForest 오염도(오탐 억제)
+    min_occupancy_min: float = 2.0  # 이보다 짧은 점유는 노이즈(ghost)
+    flicker_thresh: int = 20  # 센서 토글 폭주(flicker) 임계
+    stuck_min: float = 18 * 60  # 과도한 장시간 점유(stuck) 임계(분)
 
 
 SEED = 20231016  # 코랏 국방대제전 금상(23.09) 무렵 — 재현용 고정 시드

@@ -6,6 +6,7 @@
   - relight      : 휘도 환경(day/low_light/glare/backlit/overexposed) 증강
 조명 증강은 '적용한 변환 = 환경 정답'이므로 ③ 분류의 정직한 라벨이 된다.
 """
+
 from __future__ import annotations
 import csv
 import random
@@ -49,8 +50,9 @@ def render_plate(text: str, cfg: PlateCfg = PlateCfg()) -> np.ndarray:
     f = _font(int(H * 0.62))
     bb = d.textbbox((0, 0), text, font=f)
     tw, th = bb[2] - bb[0], bb[3] - bb[1]
-    d.text(((W - tw) / 2 - bb[0], (H - th) / 2 - bb[1]), text,
-           font=f, fill=(15, 15, 15))
+    d.text(
+        ((W - tw) / 2 - bb[0], (H - th) / 2 - bb[1]), text, font=f, fill=(15, 15, 15)
+    )
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 
@@ -63,13 +65,19 @@ def _asphalt(w: int, h: int, rng: np.random.Generator) -> np.ndarray:
     # 차선/얼룩 약간
     for _ in range(rng.integers(0, 3)):
         y = int(rng.integers(0, h))
-        cv2.line(img, (0, y), (w, y), (int(rng.integers(140, 180)),) * 3,
-                 int(rng.integers(2, 6)))
+        cv2.line(
+            img,
+            (0, y),
+            (w, y),
+            (int(rng.integers(140, 180)),) * 3,
+            int(rng.integers(2, 6)),
+        )
     return img
 
 
-def make_scene(text: str, rng: np.random.Generator, size=(640, 480),
-               cfg: PlateCfg = PlateCfg()):
+def make_scene(
+    text: str, rng: np.random.Generator, size=(640, 480), cfg: PlateCfg = PlateCfg()
+):
     """노면 배경에 번호판을 원근 합성. (scene_bgr, bbox_xyxy, plate_text) 반환."""
     W, H = size
     scene = _asphalt(W, H, rng)
@@ -83,16 +91,15 @@ def make_scene(text: str, rng: np.random.Generator, size=(640, 480),
     # 약한 원근 워프
     jitter = lambda m: rng.uniform(-m, m)
     src = np.float32([[0, 0], [pw2, 0], [pw2, ph2], [0, ph2]])
-    dst = src + np.float32([[jitter(pw2 * .06), jitter(ph2 * .12)] for _ in range(4)])
+    dst = src + np.float32([[jitter(pw2 * 0.06), jitter(ph2 * 0.12)] for _ in range(4)])
     Mwarp = cv2.getPerspectiveTransform(src, dst)
-    warp = cv2.warpPerspective(plate, Mwarp, (pw2, ph2),
-                               borderValue=(110, 110, 110))
+    warp = cv2.warpPerspective(plate, Mwarp, (pw2, ph2), borderValue=(110, 110, 110))
 
     x0 = int(rng.integers(10, max(11, W - pw2 - 10)))
     y0 = int(rng.integers(10, max(11, H - ph2 - 10)))
-    roi = scene[y0:y0 + ph2, x0:x0 + pw2]
+    roi = scene[y0 : y0 + ph2, x0 : x0 + pw2]
     mask = (warp.sum(2) > 30)[..., None]
-    scene[y0:y0 + ph2, x0:x0 + pw2] = np.where(mask, warp, roi)
+    scene[y0 : y0 + ph2, x0 : x0 + pw2] = np.where(mask, warp, roi)
     bbox = (x0, y0, x0 + pw2, y0 + ph2)
     return scene, bbox, text
 
@@ -110,16 +117,16 @@ def relight(bgr: np.ndarray, env: str, rng: np.random.Generator) -> np.ndarray:
     elif env == "overexposed":
         img = img * rng.uniform(1.5, 2.1) + rng.uniform(40, 80)
     elif env == "glare":
-        cx, cy = int(rng.uniform(.2, .8) * w), int(rng.uniform(.2, .8) * h)
+        cx, cy = int(rng.uniform(0.2, 0.8) * w), int(rng.uniform(0.2, 0.8) * h)
         Y, X = np.ogrid[:h, :w]
         rad = rng.uniform(0.12, 0.22) * (w + h)
-        blob = np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * rad ** 2))
-        img += (blob[..., None] * rng.uniform(230, 300))
+        blob = np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * rad**2))
+        img += blob[..., None] * rng.uniform(230, 300)
     elif env == "backlit":
         Y, X = np.ogrid[:h, :w]
         cx, cy = w / 2, h / 2
         d = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
-        vig = (d / d.max())                      # 중앙 어둡고 주변 밝게
+        vig = d / d.max()  # 중앙 어둡고 주변 밝게
         img = img * (0.45 + 0.05) + vig[..., None] * rng.uniform(120, 180)
     return np.clip(img, 0, 255).astype(np.uint8)
 
@@ -132,14 +139,15 @@ def add_weather(bgr: np.ndarray, weather: str, rng: np.random.Generator) -> np.n
     if weather == "rain":
         # 채도·대비·밝기 저하
         gray = img.mean(2, keepdims=True)
-        img = img * 0.78 + gray * 0.10 + 14            # 탈색 + 약간 어둡게
+        img = img * 0.78 + gray * 0.10 + 14  # 탈색 + 약간 어둡게
         # 빗줄기(대각 모션블러된 밝은 선)
         layer = np.zeros((h, w), np.float32)
         ang = rng.uniform(-20, 20)
         for _ in range(int(rng.uniform(420, 700))):
             x, y = rng.integers(0, w), rng.integers(0, h)
             ln = int(rng.uniform(8, 22))
-            dx = int(ln * np.sin(np.deg2rad(ang))); dy = int(ln * np.cos(np.deg2rad(ang)))
+            dx = int(ln * np.sin(np.deg2rad(ang)))
+            dy = int(ln * np.cos(np.deg2rad(ang)))
             cv2.line(layer, (x, y), (x + dx, y + dy), float(rng.uniform(120, 200)), 1)
         k = max(3, int(rng.uniform(7, 13)))
         layer = cv2.GaussianBlur(layer, (1, k | 1), 0)
@@ -149,7 +157,8 @@ def add_weather(bgr: np.ndarray, weather: str, rng: np.random.Generator) -> np.n
         for _ in range(int(rng.uniform(6, 14))):
             cx, cy = rng.integers(0, w), rng.integers(0, h)
             r = int(rng.uniform(6, 16))
-            mask = np.zeros((h, w), np.uint8); cv2.circle(mask, (cx, cy), r, 255, -1)
+            mask = np.zeros((h, w), np.uint8)
+            cv2.circle(mask, (cx, cy), r, 255, -1)
             m = (mask > 0)[..., None]
             img = np.where(m, blurred, img)
         img = cv2.GaussianBlur(img, (3, 3), 0)
@@ -158,7 +167,7 @@ def add_weather(bgr: np.ndarray, weather: str, rng: np.random.Generator) -> np.n
         t = float(rng.uniform(0.38, 0.6))
         A = float(rng.uniform(190, 225))
         img = img * t + A * (1 - t)
-        img = img * 0.92 + img.mean(2, keepdims=True) * 0.08   # 탈색
+        img = img * 0.92 + img.mean(2, keepdims=True) * 0.08  # 탈색
         img = cv2.GaussianBlur(img, (3, 3), 0)
     elif weather == "snow":
         img = img * 0.95 + 16
@@ -188,11 +197,11 @@ def relight_b(bgr: np.ndarray, env: str, rng: np.random.Generator) -> np.ndarray
     elif env == "overexposed":
         img = img * rng.uniform(1.4, 1.95) + rng.uniform(55, 100)
     elif env == "glare":
-        cx = int(rng.uniform(.15, .85) * w)
-        cy = int(rng.uniform(.15, .85) * h)
+        cx = int(rng.uniform(0.15, 0.85) * w)
+        cy = int(rng.uniform(0.15, 0.85) * h)
         Y, X = np.ogrid[:h, :w]
         rad = rng.uniform(0.10, 0.19) * (w + h)
-        blob = np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * rad ** 2))
+        blob = np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) / (2 * rad**2))
         img += blob[..., None] * rng.uniform(250, 330)
     elif env == "backlit":
         Y, X = np.ogrid[:h, :w]
@@ -201,7 +210,9 @@ def relight_b(bgr: np.ndarray, env: str, rng: np.random.Generator) -> np.ndarray
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
-def add_weather_b(bgr: np.ndarray, weather: str, rng: np.random.Generator) -> np.ndarray:
+def add_weather_b(
+    bgr: np.ndarray, weather: str, rng: np.random.Generator
+) -> np.ndarray:
     """add_weather의 2차 생성기(variant B) — 같은 악천후, 다른 파라미터(OOD 검증용)."""
     img = bgr.astype(np.float32)
     h, w = img.shape[:2]
@@ -230,17 +241,21 @@ def add_weather_b(bgr: np.ndarray, weather: str, rng: np.random.Generator) -> np
         flakes = np.zeros((h, w), np.float32)
         for _ in range(int(rng.uniform(200, 430))):
             x, y = rng.integers(0, w), rng.integers(0, h)
-            cv2.circle(flakes, (x, y), int(rng.uniform(1, 5)), float(rng.uniform(190, 255)), -1)
+            cv2.circle(
+                flakes, (x, y), int(rng.uniform(1, 5)), float(rng.uniform(190, 255)), -1
+            )
         flakes = cv2.GaussianBlur(flakes, (5, 5), 0)
         img += flakes[..., None] * 0.9
         img = cv2.GaussianBlur(img, (3, 3), 0)
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
-def apply_env(scene: np.ndarray, env: str, rng: np.random.Generator,
-              variant: str = "A") -> np.ndarray:
+def apply_env(
+    scene: np.ndarray, env: str, rng: np.random.Generator, variant: str = "A"
+) -> np.ndarray:
     """환경 라벨 → 밝기/악천후 증강 디스패치. variant='B'는 OOD 검증용 2차 생성기."""
     from .config import WEATHER_ENVS
+
     _relight = relight_b if variant == "B" else relight
     _weather = add_weather_b if variant == "B" else add_weather
     if env in WEATHER_ENVS:
@@ -248,8 +263,9 @@ def apply_env(scene: np.ndarray, env: str, rng: np.random.Generator,
     return _relight(scene, env, rng)
 
 
-def build_plate_dataset(n: int, out_dir: Path, seed: int = SEED,
-                        cfg: PlateCfg = PlateCfg()):
+def build_plate_dataset(
+    n: int, out_dir: Path, seed: int = SEED, cfg: PlateCfg = PlateCfg()
+):
     """검출+OCR용 합성 장면 n개 생성. labels.csv(파일,bbox,text) 기록."""
     out_dir = Path(out_dir)
     (out_dir / "images").mkdir(parents=True, exist_ok=True)

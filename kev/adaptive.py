@@ -8,6 +8,7 @@
   - 차량 없거나 판독 불가한 프레임에 풀 추론을 낭비하지 않음 → 저전력·내구성
   - 저조도엔 IR 폴백, 역광/글레어엔 노출 보정 → 번호판 인식 커버리지 유지
 """
+
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
@@ -28,16 +29,18 @@ def brightness_features(bgr: np.ndarray) -> dict:
     h, w = y.shape
     flat = y.ravel()
     p05, p50, p95 = np.percentile(flat, [5, 50, 95])
-    sat_hi = float(np.mean(flat >= 245.0))     # 과포화(글레어/과노출)
-    sat_lo = float(np.mean(flat <= 12.0))      # 클리핑(암부)
+    sat_hi = float(np.mean(flat >= 245.0))  # 과포화(글레어/과노출)
+    sat_lo = float(np.mean(flat <= 12.0))  # 클리핑(암부)
     dyn_range = float(p95 - p05)
 
     # 중앙 ROI(번호판이 잡히는 영역) vs 주변 밝기 격차 → 역광 판단
     cy0, cy1 = int(h * 0.35), int(h * 0.65)
     cx0, cx1 = int(w * 0.30), int(w * 0.70)
     center = float(y[cy0:cy1, cx0:cx1].mean())
-    border = float((flat.sum() - y[cy0:cy1, cx0:cx1].sum()) /
-                   max(1, flat.size - (cy1 - cy0) * (cx1 - cx0)))
+    border = float(
+        (flat.sum() - y[cy0:cy1, cx0:cx1].sum())
+        / max(1, flat.size - (cy1 - cy0) * (cx1 - cx0))
+    )
 
     # 국소 대비(라플라시안 분산) → 텍스트 가독 신호의 대용치
     lap_var = float(cv2.Laplacian(y, cv2.CV_32F, ksize=3).var())
@@ -67,20 +70,48 @@ def brightness_features(bgr: np.ndarray) -> dict:
     Jxx = cv2.GaussianBlur(hgx * hgx, (0, 0), 2.0)
     Jyy = cv2.GaussianBlur(hgy * hgy, (0, 0), 2.0)
     Jxy = cv2.GaussianBlur(hgx * hgy, (0, 0), 2.0)
-    streak_coh = float(np.mean(np.sqrt((Jxx - Jyy) ** 2 + 4 * Jxy ** 2) / (Jxx + Jyy + 1e-3)))
+    streak_coh = float(
+        np.mean(np.sqrt((Jxx - Jyy) ** 2 + 4 * Jxy**2) / (Jxx + Jyy + 1e-3))
+    )
 
-    return dict(mean=float(flat.mean()), std=float(flat.std()),
-                p05=float(p05), p50=float(p50), p95=float(p95),
-                sat_hi=sat_hi, sat_lo=sat_lo, dyn_range=dyn_range,
-                center=center, border=border, backlit=border - center,
-                lap_var=lap_var, glare_blob=glare_blob,
-                dark_channel=dark_channel, sat_mean=sat_mean,
-                speckle=speckle, streak_coh=streak_coh)
+    return dict(
+        mean=float(flat.mean()),
+        std=float(flat.std()),
+        p05=float(p05),
+        p50=float(p50),
+        p95=float(p95),
+        sat_hi=sat_hi,
+        sat_lo=sat_lo,
+        dyn_range=dyn_range,
+        center=center,
+        border=border,
+        backlit=border - center,
+        lap_var=lap_var,
+        glare_blob=glare_blob,
+        dark_channel=dark_channel,
+        sat_mean=sat_mean,
+        speckle=speckle,
+        streak_coh=streak_coh,
+    )
 
 
-FEATURE_ORDER = ["mean", "std", "p05", "p50", "p95", "sat_hi", "sat_lo",
-                 "dyn_range", "backlit", "lap_var", "glare_blob",
-                 "dark_channel", "sat_mean", "speckle", "streak_coh"]
+FEATURE_ORDER = [
+    "mean",
+    "std",
+    "p05",
+    "p50",
+    "p95",
+    "sat_hi",
+    "sat_lo",
+    "dyn_range",
+    "backlit",
+    "lap_var",
+    "glare_blob",
+    "dark_channel",
+    "sat_mean",
+    "speckle",
+    "streak_coh",
+]
 
 
 def feature_vector(feats: dict) -> np.ndarray:
@@ -108,8 +139,9 @@ def readability(feats: dict) -> float:
     """번호판 판독가능성 추정 [0,1]. 대비·동적범위 높고 포화/암부 적을수록 ↑."""
     contrast = np.clip(feats["dyn_range"] / 180.0, 0, 1)
     sharp = np.clip(feats["lap_var"] / 400.0, 0, 1)
-    spoil = np.clip(feats["sat_hi"] * 2.0 + feats["sat_lo"] * 1.5 +
-                    feats["glare_blob"] * 2.5, 0, 1)
+    spoil = np.clip(
+        feats["sat_hi"] * 2.0 + feats["sat_lo"] * 1.5 + feats["glare_blob"] * 2.5, 0, 1
+    )
     return float(np.clip(0.5 * contrast + 0.5 * sharp - 0.6 * spoil, 0, 1))
 
 
@@ -127,7 +159,7 @@ class AdaptiveSensor:
 
     def __init__(self, cfg: AdaptiveCfg = AdaptiveCfg(), classifier=None):
         self.cfg = cfg
-        self.clf = classifier        # sklearn 호환 (predict)
+        self.clf = classifier  # sklearn 호환 (predict)
 
     def classify(self, feats: dict) -> str:
         if self.clf is not None:
@@ -138,11 +170,11 @@ class AdaptiveSensor:
         """환경 × 활동도 → 센싱 모드.
         모션이 없으면(차량 부재) 센서 절전; 차량 존재 시 휘도로 모드 선택."""
         if motion < self.cfg.motion_skip:
-            return "skip"                     # 차량 없음 → 듀티사이클 절전
+            return "skip"  # 차량 없음 → 듀티사이클 절전
         if env == "low_light":
-            return "ir"                       # 저조도 → 적외선 폴백
+            return "ir"  # 저조도 → 적외선 폴백
         if env in ("glare", "backlit", "overexposed", "rain", "fog", "snow"):
-            return "rgb_boost"                # 보정/대비복원 후 RGB
+            return "rgb_boost"  # 보정/대비복원 후 RGB
         return "rgb_full"
 
     def step(self, bgr: np.ndarray, motion: float = 1.0) -> Decision:
@@ -154,5 +186,4 @@ class AdaptiveSensor:
         # IR 폴백은 저조도를 복원하므로 판독가능으로 간주.
         run_ocr = mode != "skip" and (mode == "ir" or read >= self.cfg.readable_min)
         power = POWER_COST[mode] + (OCR_COST if run_ocr else 0.0)
-        return Decision(env=env, mode=mode, readable=read,
-                        run_ocr=run_ocr, power=power)
+        return Decision(env=env, mode=mode, readable=read, run_ocr=run_ocr, power=power)

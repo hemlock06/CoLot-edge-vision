@@ -1,4 +1,5 @@
 """통합 파이프라인 데모 시나리오 — ③→①→②를 한 입출차 흐름에 태움."""
+
 from __future__ import annotations
 import random
 import numpy as np
@@ -13,16 +14,16 @@ from .pipeline import build_pipeline
 
 # (이벤트 라벨, 환경, 모션, 차량유무, 설명)
 SCENARIO = [
-    ("normal",       "day_normal",  0.35, True,  "주간 정상 주차"),
-    ("normal",       "low_light",   0.30, True,  "야간 — IR 폴백"),
-    (None,           "day_normal",  0.003, False, "차량 없음 — 절전"),
-    ("normal",       "backlit",     0.28, True,  "역광 — 노출 보정"),
-    ("normal",       "rain",        0.30, True,  "비 — 보정/다중판독"),
-    ("normal",       "fog",         0.26, True,  "안개 — 대비 복원"),
-    ("normal",       "snow",        0.28, True,  "눈 — 송이 가림"),
-    ("unauthorized", "day_normal",  0.33, True,  "무단주차(미등록)"),
-    ("glare",        "glare",       0.20, True,  "글레어 — 판독 곤란"),
-    ("fault_subtle", "day_normal",  0.05, True,  "센서 약고장(등록 정상)"),
+    ("normal", "day_normal", 0.35, True, "주간 정상 주차"),
+    ("normal", "low_light", 0.30, True, "야간 — IR 폴백"),
+    (None, "day_normal", 0.003, False, "차량 없음 — 절전"),
+    ("normal", "backlit", 0.28, True, "역광 — 노출 보정"),
+    ("normal", "rain", 0.30, True, "비 — 보정/다중판독"),
+    ("normal", "fog", 0.26, True, "안개 — 대비 복원"),
+    ("normal", "snow", 0.28, True, "눈 — 송이 가림"),
+    ("unauthorized", "day_normal", 0.33, True, "무단주차(미등록)"),
+    ("glare", "glare", 0.20, True, "글레어 — 판독 곤란"),
+    ("fault_subtle", "day_normal", 0.05, True, "센서 약고장(등록 정상)"),
 ]
 
 
@@ -72,15 +73,19 @@ def run_demo(save_fig: bool = True):
         frames.append(frame)
 
     # 콘솔 표
-    print(f"{'상황':18s} {'환경':11s} {'모드':9s} {'OCR':4s} "
-          f"{'번호판(GT→pred)':22s} {'이상':12s} {'전력':5s}")
+    print(
+        f"{'상황':18s} {'환경':11s} {'모드':9s} {'OCR':4s} "
+        f"{'번호판(GT→pred)':22s} {'이상':12s} {'전력':5s}"
+    )
     print("-" * 92)
     for desc, gt, rec in records:
         pred = rec.plate or "—"
         gtp = f"{gt or '—'}→{pred}"
         v = "✓" if rec.plate_valid else (" " if rec.plate is None else "✗")
-        print(f"{desc:18s} {rec.env:11s} {rec.mode:9s} {str(rec.run_ocr):4s} "
-              f"{gtp:22s} {str(rec.anomaly or '—'):12s} {rec.power:4.2f} {v}")
+        print(
+            f"{desc:18s} {rec.env:11s} {rec.mode:9s} {str(rec.run_ocr):4s} "
+            f"{gtp:22s} {str(rec.anomaly or '—'):12s} {rec.power:4.2f} {v}"
+        )
 
     if save_fig:
         _save_demo_figure(records, frames)
@@ -90,8 +95,10 @@ def run_demo(save_fig: bool = True):
 def _save_demo_figure(records, frames):
     """데모 결과를 격자 그림으로 저장(figs/pipeline_demo.png)."""
     import matplotlib
+
     matplotlib.use("Agg")
     from .plotting import use_korean
+
     use_korean()
     import matplotlib.pyplot as plt
 
@@ -99,7 +106,7 @@ def _save_demo_figure(records, frames):
     nrow = (len(records) + ncol - 1) // ncol
     fig, axes = plt.subplots(nrow, ncol, figsize=(13, 3 * nrow))
     axes = axes.ravel()
-    for ax in axes[len(records):]:
+    for ax in axes[len(records) :]:
         ax.axis("off")
     for ax, (desc, gt, rec), fr in zip(axes, records, frames):
         ax.imshow(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB))
@@ -111,8 +118,10 @@ def _save_demo_figure(records, frames):
             tag += f"\n②{rec.anomaly}"
         color = "#C0392B" if rec.anomaly not in (None, "normal") else "#1E5631"
         ax.set_title(tag, fontsize=8, color=color)
-    fig.suptitle("코랏 카스토퍼 엣지 파이프라인 — ③환경적응 → ①번호판 → ②이상탐지",
-                 fontweight="bold")
+    fig.suptitle(
+        "코랏 카스토퍼 엣지 파이프라인 — ③환경적응 → ①번호판 → ②이상탐지",
+        fontweight="bold",
+    )
     fig.tight_layout()
     fig.savefig(FIGS / "pipeline_demo.png", dpi=130)
     plt.close(fig)

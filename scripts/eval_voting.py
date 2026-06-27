@@ -6,17 +6,21 @@
 (이전엔 프레임마다 새 악천후를 줘 오류 독립성을 과대평가 → 투표 이득 과대)
 산출: data/voting_metrics.json, figs/voting.png
 """
+
 from __future__ import annotations
 import sys, json, random
 from pathlib import Path
 import numpy as np
 import cv2
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from kev.plotting import use_korean; use_korean()
+from kev.plotting import use_korean
+
+use_korean()
 from kev.config import DATA, FIGS, SEED
 from kev.plate_synth import render_plate, add_weather, random_plate_text
 from kev.plate import correct_plate, PLATE_ALLOW
@@ -27,8 +31,10 @@ CONDS = [("clear", "맑음"), ("rain", "비"), ("fog", "안개"), ("snow", "눈"
 
 def main(n_veh=40, k_frames=7, noise_std=12.0):
     import easyocr
+
     ocr = easyocr.Reader(["ko", "en"], gpu=False, verbose=False)
-    rng = np.random.default_rng(SEED); prng = random.Random(SEED)
+    rng = np.random.default_rng(SEED)
+    prng = random.Random(SEED)
 
     res = {}
     for cond, ko in CONDS:
@@ -37,12 +43,16 @@ def main(n_veh=40, k_frames=7, noise_std=12.0):
             t = random_plate_text(prng)
             base = render_plate(t)
             if cond != "clear":
-                base = add_weather(base, cond, rng)      # 트랙당 1회 (조건 공유)
-            voter = PlateVoter(); frame_ok = 0
+                base = add_weather(base, cond, rng)  # 트랙당 1회 (조건 공유)
+            voter = PlateVoter()
+            frame_ok = 0
             for _ in range(k_frames):
                 # 프레임별 독립 센서 노이즈만 (악천후 조건은 고정 → 상관)
-                fr = np.clip(base.astype(np.float32) + rng.normal(0, noise_std, base.shape),
-                             0, 255).astype(np.uint8)
+                fr = np.clip(
+                    base.astype(np.float32) + rng.normal(0, noise_std, base.shape),
+                    0,
+                    255,
+                ).astype(np.uint8)
                 if rng.random() < 0.35:
                     fr = cv2.GaussianBlur(fr, (3, 3), 0)
                 raw = "".join(ocr.readtext(fr, detail=0, allowlist=PLATE_ALLOW))
@@ -55,26 +65,35 @@ def main(n_veh=40, k_frames=7, noise_std=12.0):
 
     res["_model"] = "conservative: fixed-weather per track + independent sensor noise"
     (DATA / "voting_metrics.json").write_text(
-        json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+        json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     cnd = [c for c, _ in CONDS]
-    x = np.arange(len(cnd)); w = 0.38
+    x = np.arange(len(cnd))
+    w = 0.38
     fig, ax = plt.subplots(figsize=(6.8, 3.9))
     s = [res[c]["single"] * 100 for c in cnd]
     v = [res[c]["voted"] * 100 for c in cnd]
-    ax.bar(x - w/2, s, w, label="단일 프레임", color="#C0C6CE")
-    ax.bar(x + w/2, v, w, label=f"{k_frames}프레임 투표", color="#2D6CB5")
+    ax.bar(x - w / 2, s, w, label="단일 프레임", color="#C0C6CE")
+    ax.bar(x + w / 2, v, w, label=f"{k_frames}프레임 투표", color="#2D6CB5")
     for i in range(len(cnd)):
-        ax.text(i - w/2, s[i], f"{s[i]:.0f}", ha="center", va="bottom", fontsize=8)
-        ax.text(i + w/2, v[i], f"{v[i]:.0f}", ha="center", va="bottom", fontsize=8)
-    ax.set_xticks(x); ax.set_xticklabels([ko for _, ko in CONDS])
-    ax.set_ylim(0, 108); ax.set_ylabel("완전일치 (%)"); ax.legend()
+        ax.text(i - w / 2, s[i], f"{s[i]:.0f}", ha="center", va="bottom", fontsize=8)
+        ax.text(i + w / 2, v[i], f"{v[i]:.0f}", ha="center", va="bottom", fontsize=8)
+    ax.set_xticks(x)
+    ax.set_xticklabels([ko for _, ko in CONDS])
+    ax.set_ylim(0, 108)
+    ax.set_ylabel("완전일치 (%)")
+    ax.legend()
     ax.set_title("다중프레임 투표 (보수적: 조건 공유 + 센서노이즈만 독립)")
-    fig.tight_layout(); fig.savefig(FIGS / "voting.png", dpi=130); plt.close(fig)
+    fig.tight_layout()
+    fig.savefig(FIGS / "voting.png", dpi=130)
+    plt.close(fig)
 
     print("=== 단일 → 투표 (완전일치, 보수적 모델) ===")
     for c, ko in CONDS:
-        print(f"  {ko:4s} {res[c]['single']*100:5.1f}% → {res[c]['voted']*100:5.1f}%")
+        print(
+            f"  {ko:4s} {res[c]['single'] * 100:5.1f}% → {res[c]['voted'] * 100:5.1f}%"
+        )
 
 
 if __name__ == "__main__":
