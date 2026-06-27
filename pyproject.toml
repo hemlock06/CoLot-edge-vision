@@ -1,0 +1,18 @@
+# 패키징 메타데이터(P0-4) — `import kev` 의 cwd 의존성 제거 + 표준 설치 흐름 지원.
+# 무거운 런타임 의존성(torch/onnx 등)은 requirements.txt 로 분리 관리(P1-4).
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kev"
+version = "0.1.0"
+description = "CoLot Edge Vision — 스마트 카스토퍼 엣지-비전 레퍼런스 구현"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["kev"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

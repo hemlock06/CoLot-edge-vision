@@ -9,27 +9,74 @@
 
 from __future__ import annotations
 import csv
+import os
 import random
 from pathlib import Path
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFont
 
-from .config import PLATE_HANGUL, PlateCfg, SEED
+from .config import ASSETS, PLATE_HANGUL, PlateCfg, SEED
 
+# 한글 폰트 직접 지정용 환경변수(최우선). 비-Windows/CI/도커 이식성(P0-3).
+FONT_ENV = "KEV_FONT"
+# 리포지에 폰트를 동봉하려면 여기에 .ttf/.ttc 를 둔다(라이선스는 사용자 책임).
+_BUNDLED_FONT_DIR = ASSETS / "fonts"
+
+# OS 표준 한글 폰트 경로(우선순위 순). 첫 존재 폰트를 사용.
 _FONT_CANDIDATES = [
+    # Windows
     r"C:\Windows\Fonts\malgunbd.ttf",
     r"C:\Windows\Fonts\malgun.ttf",
     r"C:\Windows\Fonts\HMKMRHD.ttf",
     r"C:\Windows\Fonts\gulim.ttc",
+    # Linux (Nanum / Noto CJK) — 배포판·도커 공통 경로
+    "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.otf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
+    # macOS
+    "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
+    "/Library/Fonts/AppleGothic.ttf",
 ]
 
 
+def _font_candidates() -> list[str]:
+    """폰트 후보 경로(우선순위 순): KEV_FONT 환경변수 → 동봉(assets/fonts) → OS 표준."""
+    cands: list[str] = []
+    env = os.environ.get(FONT_ENV)
+    if env:
+        cands.append(env)
+    if _BUNDLED_FONT_DIR.is_dir():
+        bundled: list[str] = []
+        for ext in ("*.ttf", "*.ttc", "*.otf"):
+            bundled.extend(str(p) for p in _BUNDLED_FONT_DIR.glob(ext))
+        cands.extend(sorted(bundled))
+    cands.extend(_FONT_CANDIDATES)
+    return cands
+
+
+def _resolve_font_path() -> str | None:
+    """존재하는 첫 폰트 경로(없으면 None)."""
+    for p in _font_candidates():
+        if p and Path(p).exists():
+            return p
+    return None
+
+
 def _font(size: int) -> ImageFont.FreeTypeFont:
-    for p in _FONT_CANDIDATES:
-        if Path(p).exists():
-            return ImageFont.truetype(p, size)
-    raise FileNotFoundError("한글 폰트를 찾지 못함 (malgun/gulim)")
+    path = _resolve_font_path()
+    if path is None:
+        searched = "\n  ".join(_font_candidates())
+        raise FileNotFoundError(
+            f"한글 폰트를 찾지 못함. 환경변수 {FONT_ENV}=<폰트.ttf> 로 지정하거나 "
+            f"{_BUNDLED_FONT_DIR} 에 .ttf/.ttc 를 두세요.\n  탐색 경로:\n  {searched}"
+        )
+    return ImageFont.truetype(path, size)
 
 
 def random_plate_text(rng: random.Random) -> str:
