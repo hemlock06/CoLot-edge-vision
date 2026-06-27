@@ -9,7 +9,6 @@
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List
 import numpy as np
 
 
@@ -26,14 +25,14 @@ class Event:
 def simulate(n_events: int = 1200, n_spots: int = 40, days: int = 14,
              seed: int = 20231016,
              mix=(("normal", .80), ("unauthorized", .13), ("fault", .07)),
-             random_faults: bool = False) -> List[Event]:
+             random_faults: bool = False) -> list[Event]:
     """random_faults=True: 고장을 *명백/subtle 설계 없이* 연속 파라미터로 생성
     → 자기충족 ablation 반박용(룰·ML 모두 데이터에 맞춰지지 않은 상태에서 평가)."""
     rng = np.random.default_rng(seed)
     labels = [m[0] for m in mix]
     probs = np.array([m[1] for m in mix]); probs /= probs.sum()
     horizon = days * 24 * 60
-    evs: List[Event] = []
+    evs: list[Event] = []
     for _ in range(n_events):
         lab = str(rng.choice(labels, p=probs))
         spot = int(rng.integers(0, n_spots))

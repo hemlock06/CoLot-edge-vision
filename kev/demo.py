@@ -27,26 +27,31 @@ SCENARIO = [
 
 
 def _event(label: str, rng: random.Random) -> Event:
+    """시나리오 라벨 → 점유 이벤트(데모용)."""
     start = rng.uniform(8 * 60, 18 * 60)
     if label == "normal":
-        dur = rng.uniform(30, 60); return Event(1, start, start + dur, True, 0, "normal")
+        dur = rng.uniform(30, 60)
+        return Event(1, start, start + dur, True, 0, "normal")
     if label == "unauthorized":
-        dur = rng.uniform(30, 90); return Event(1, start, start + dur, False, 0,
-                                                 "unauthorized")
+        dur = rng.uniform(30, 90)
+        return Event(1, start, start + dur, False, 0, "unauthorized")
     if label == "fault_subtle":
-        dur = rng.uniform(2.5, 4.0); return Event(1, start, start + dur, True, 0, "fault")
+        dur = rng.uniform(2.5, 4.0)
+        return Event(1, start, start + dur, True, 0, "fault")
     # glare 등: 정상 점유(이상 아님)
-    dur = rng.uniform(30, 60); return Event(1, start, start + dur, True, 0, "normal")
+    dur = rng.uniform(30, 60)
+    return Event(1, start, start + dur, True, 0, "normal")
 
 
-def default_plate_reader(gpu=False) -> PlateReader:
+def default_plate_reader(gpu: bool = False) -> PlateReader:
     int8 = DATA / "runs" / "plate" / "weights" / "best_int8.onnx"
     det = OnnxYolo(int8, imgsz=320)
     return PlateReader(det, gpu=gpu)
 
 
-def run_demo(save_fig=True):
-    rng = np.random.default_rng(7); prng = random.Random(7)
+def run_demo(save_fig: bool = True):
+    rng = np.random.default_rng(7)
+    prng = random.Random(7)
     reader = default_plate_reader(gpu=False)
     pipe = build_pipeline(reader)
 
@@ -63,12 +68,14 @@ def run_demo(save_fig=True):
         if ev_label is not None:
             lab = "normal" if ev_label == "glare" else ev_label
             pipe.on_exit(rec, _event(lab, prng))
-        records.append((desc, text, rec)); frames.append(frame)
+        records.append((desc, text, rec))
+        frames.append(frame)
 
     # 콘솔 표
-    print(f"{'상황':18s} {'환경':11s} {'모드':9s} {'OCR':4s} {'번호판(GT→pred)':22s} {'이상':12s} {'전력':5s}")
+    print(f"{'상황':18s} {'환경':11s} {'모드':9s} {'OCR':4s} "
+          f"{'번호판(GT→pred)':22s} {'이상':12s} {'전력':5s}")
     print("-" * 92)
-    for (desc, gt, rec) in records:
+    for desc, gt, rec in records:
         pred = rec.plate or "—"
         gtp = f"{gt or '—'}→{pred}"
         v = "✓" if rec.plate_valid else (" " if rec.plate is None else "✗")
@@ -76,25 +83,36 @@ def run_demo(save_fig=True):
               f"{gtp:22s} {str(rec.anomaly or '—'):12s} {rec.power:4.2f} {v}")
 
     if save_fig:
-        import matplotlib; matplotlib.use("Agg")
-        from .plotting import use_korean; use_korean()
-        import matplotlib.pyplot as plt
-        ncol = 4; nrow = (len(records) + ncol - 1) // ncol
-        fig, axes = plt.subplots(nrow, ncol, figsize=(13, 3 * nrow))
-        axes = axes.ravel()
-        for ax in axes[len(records):]:
-            ax.axis("off")
-        for ax, (desc, gt, rec), fr in zip(axes, records, frames):
-            ax.imshow(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)); ax.axis("off")
-            tag = f"{desc}\n③{rec.env}·{rec.mode}"
-            if rec.run_ocr:
-                tag += f"\n①{rec.plate or '검출X'}"
-            if rec.anomaly:
-                tag += f"\n②{rec.anomaly}"
-            color = "#C0392B" if rec.anomaly not in (None, "normal") else "#1E5631"
-            ax.set_title(tag, fontsize=8, color=color)
-        fig.suptitle("코랏 카스토퍼 엣지 파이프라인 — ③환경적응 → ①번호판 → ②이상탐지",
-                     fontweight="bold")
-        fig.tight_layout(); fig.savefig(FIGS / "pipeline_demo.png", dpi=130)
-        plt.close(fig)
+        _save_demo_figure(records, frames)
     return records
+
+
+def _save_demo_figure(records, frames):
+    """데모 결과를 격자 그림으로 저장(figs/pipeline_demo.png)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    from .plotting import use_korean
+    use_korean()
+    import matplotlib.pyplot as plt
+
+    ncol = 4
+    nrow = (len(records) + ncol - 1) // ncol
+    fig, axes = plt.subplots(nrow, ncol, figsize=(13, 3 * nrow))
+    axes = axes.ravel()
+    for ax in axes[len(records):]:
+        ax.axis("off")
+    for ax, (desc, gt, rec), fr in zip(axes, records, frames):
+        ax.imshow(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB))
+        ax.axis("off")
+        tag = f"{desc}\n③{rec.env}·{rec.mode}"
+        if rec.run_ocr:
+            tag += f"\n①{rec.plate or '검출X'}"
+        if rec.anomaly:
+            tag += f"\n②{rec.anomaly}"
+        color = "#C0392B" if rec.anomaly not in (None, "normal") else "#1E5631"
+        ax.set_title(tag, fontsize=8, color=color)
+    fig.suptitle("코랏 카스토퍼 엣지 파이프라인 — ③환경적응 → ①번호판 → ②이상탐지",
+                 fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(FIGS / "pipeline_demo.png", dpi=130)
+    plt.close(fig)

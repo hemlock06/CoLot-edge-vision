@@ -252,3 +252,30 @@ def test_streaming_alerts_in_occupancy():
     from kev.streaming import StreamingMonitor
     alerts = StreamingMonitor().run(simulate(n_events=600, seed=4))
     assert alerts and all(a.lead > 0 and a.delay >= 0 for a in alerts)
+
+
+# ---- ① 검출→OCR→포맷검증 전체 경로 e2e ----
+def test_plate_reader_reads_synthetic():
+    """OnnxYolo 검출 + easyocr 한글 OCR + 포맷교정 전체 파이프라인 e2e.
+    무거운 의존성(easyocr) 또는 INT8 모델이 없으면 skip."""
+    pytest.importorskip("easyocr")
+    int8 = DATA / "runs" / "plate" / "weights" / "best_int8.onnx"
+    if not int8.exists():
+        pytest.skip("INT8 모델 없음 (scripts/build_plate.py 먼저)")
+    from kev.demo import default_plate_reader
+    from kev.plate import char_accuracy
+
+    reader = default_plate_reader(gpu=False)
+    g = np.random.default_rng(11)
+    p = random.Random(11)
+    accs = []
+    for _ in range(4):
+        gt = random_plate_text(p)
+        scene, _, _ = make_scene(gt, g)
+        res = reader.read(scene)
+        assert isinstance(res, list)
+        for r in res:
+            assert {"bbox", "conf", "text", "raw", "valid"} <= set(r)
+        best = max(res, key=lambda r: r["conf"]) if res else None
+        accs.append(char_accuracy(best["text"], gt) if best else 0.0)
+    assert np.mean(accs) >= 0.6        # 합성 번호판 판독(관측 1.0, 여유 임계)

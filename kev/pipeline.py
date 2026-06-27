@@ -4,11 +4,10 @@
   프레임 도착
     → ③ 휘도 환경판단 → 센싱 모드(RGB/IR/절전) · 추론 여부
        → (추론 시) ① 검출+OCR → 번호판
-    → 출차 시 점유 세션 + 예약/결제 원장 → ② 이상 판정(무단/초과/고장)
+    → 출차 시 점유 세션 + 회원 등록 원장 → ② 이상 판정(무단/센서고장)
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 import numpy as np
 import joblib
 
@@ -24,9 +23,9 @@ class Record:
     mode: str
     run_ocr: bool
     power: float
-    plate: Optional[str]
+    plate: str | None
     plate_valid: bool
-    anomaly: Optional[str]      # 출차 시 채워짐
+    anomaly: str | None         # 출차 시 채워짐
 
 
 class CoLotEdgePipeline:

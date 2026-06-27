@@ -106,8 +106,9 @@ def main():
     cm = confusion_matrix(yt, [simplify(p) for p in pred_ml],
                           labels=PRED_LABELS)
     fig, ax = plt.subplots(figsize=(5.6, 4.6))
-    im = ax.imshow(cm, cmap="Greens")
-    ax.set_xticks(range(len(PRED_LABELS))); ax.set_yticks(range(len(PRED_LABELS)))
+    ax.imshow(cm, cmap="Greens")
+    ax.set_xticks(range(len(PRED_LABELS)))
+    ax.set_yticks(range(len(PRED_LABELS)))
     ax.set_xticklabels(PRED_LABELS, rotation=35, ha="right", fontsize=8)
     ax.set_yticklabels(PRED_LABELS, fontsize=8)
     for i in range(len(PRED_LABELS)):

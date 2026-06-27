@@ -75,8 +75,9 @@ def eval_classifier(seed=SEED):
 
     cm = confusion_matrix(yte, pred, labels=ENVS)
     fig, ax = plt.subplots(figsize=(5.2, 4.4))
-    im = ax.imshow(cm, cmap="Blues")
-    ax.set_xticks(range(len(ENVS))); ax.set_yticks(range(len(ENVS)))
+    ax.imshow(cm, cmap="Blues")
+    ax.set_xticks(range(len(ENVS)))
+    ax.set_yticks(range(len(ENVS)))
     ax.set_xticklabels(ENVS, rotation=40, ha="right", fontsize=8)
     ax.set_yticklabels(ENVS, fontsize=8)
     for i in range(len(ENVS)):

@@ -9,7 +9,6 @@
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Optional
 import numpy as np
 from sklearn.ensemble import IsolationForest
 
@@ -31,7 +30,7 @@ FEATS = ["dur", "log_dur", "hour", "flicker", "registered"]
 @dataclass
 class Flag:
     idx: int
-    rule: Optional[str]     # unauthorized / sensor_fault / None
+    rule: str | None        # unauthorized / sensor_fault / None
     ml_anomaly: bool
     score: float
     pred: str               # normal / unauthorized / fault / anomaly
@@ -45,7 +44,7 @@ class ParkingAnomalyDetector:
         self._fitted = False
 
     # ---- 룰: 회원 원장 대조 + 센서 물리 위반 ----
-    def rule(self, e: Event) -> Optional[str]:
+    def rule(self, e: Event) -> str | None:
         dur = e.end - e.start
         if dur < self.cfg.min_occupancy_min:
             return "sensor_fault"                 # ghost(초단시간)
@@ -57,13 +56,13 @@ class ParkingAnomalyDetector:
             return "unauthorized"                 # 미등록 차량 점유(무단)
         return None
 
-    def fit(self, normal_events: List[Event]):
+    def fit(self, normal_events: list[Event]):
         X = np.array([features(e) for e in normal_events], np.float32)
         self.iforest.fit(X)
         self._fitted = True
         return self
 
-    def predict(self, events: List[Event]) -> List[Flag]:
+    def predict(self, events: list[Event]) -> list[Flag]:
         X = np.array([features(e) for e in events], np.float32)
         scores = self.iforest.score_samples(X) if self._fitted else np.zeros(len(events))
         ml_anom = self.iforest.predict(X) == -1 if self._fitted else np.zeros(len(events), bool)

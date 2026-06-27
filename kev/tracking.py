@@ -7,14 +7,13 @@
 from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import List, Tuple
 import re
 
 from .config import PLATE_RE
 from .plate import correct_plate
 
 
-def vote_chars(strings: List[str]) -> Tuple[str, float]:
+def vote_chars(strings: list[str]) -> tuple[str, float]:
     """문자 단위 다수결. (합의문자열, 평균 동의율)."""
     cand = [s for s in strings if s]
     if not cand:
@@ -35,7 +34,7 @@ def vote_chars(strings: List[str]) -> Tuple[str, float]:
 class PlateVoter:
     """한 차량(트랙)의 프레임별 판독을 모아 합의."""
     track_id: int = 0
-    reads: List[str] = field(default_factory=list)
+    reads: list[str] = field(default_factory=list)
 
     def add(self, raw_or_text: str, already_corrected: bool = False):
         s = raw_or_text if already_corrected else correct_plate(raw_or_text)[0]

@@ -10,7 +10,6 @@
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Optional
 from .config import AnomalyCfg
 from .occupancy import Event
 
@@ -35,7 +34,7 @@ class StreamingMonitor:
         self.unauth_grace = unauth_grace      # 미등록 점유 확인 지연(번호판 조회 랙)
         self.stuck_min = stuck_min
 
-    def alert_for(self, e: Event, idx: int) -> Optional[Alert]:
+    def alert_for(self, e: Event, idx: int) -> Alert | None:
         """차량 점유 중 발생하는 가장 이른 경보(없으면 None)."""
         cands = []
         if not e.registered:                                # 미등록 무단점유
@@ -50,7 +49,7 @@ class StreamingMonitor:
         kind, at, onset = min(cands, key=lambda c: c[1])    # 가장 이른 위반
         return Alert(e.spot, at, kind, onset, at - onset, e.end - at, idx)
 
-    def run(self, events: List[Event]) -> List[Alert]:
+    def run(self, events: list[Event]) -> list[Alert]:
         """이벤트-구동 스트림 처리 — 후보 위반시각을 시간순으로 흘리며,
         점유가 활성인 동안 위반이 처음 성립하는 시점에 경보(점유당 1회)."""
         cands = []
