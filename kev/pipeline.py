@@ -7,9 +7,8 @@
     → 출차 시 점유 세션 + 예약/결제 원장 → ② 이상 판정(무단/초과/고장)
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, List
+from dataclasses import dataclass
+from typing import Optional
 import numpy as np
 import joblib
 

@@ -12,7 +12,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 import joblib
 
@@ -20,9 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from kev.plotting import use_korean
 use_korean()
 from kev.config import ENVS, POWER_COST, OCR_COST, DATA, FIGS, SEED
-from kev.plate_synth import make_scene, relight, apply_env, random_plate_text, _asphalt
+from kev.plate_synth import make_scene, apply_env, random_plate_text, _asphalt
 from kev.adaptive import (AdaptiveSensor, brightness_features, feature_vector,
-                          rule_label, readability)
+                          rule_label)
 import random
 
 # 환경 사전확률(현장 분포 가정: 주간 다수, 야간/역광·악천후 분산)

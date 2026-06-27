@@ -9,11 +9,10 @@
 from __future__ import annotations
 import re, time, csv
 from pathlib import Path
-from typing import Optional
 import numpy as np
 import cv2
 
-from .config import PlateCfg, PLATE_RE, PLATE_HANGUL, DATA, SEED
+from .config import PLATE_RE, PLATE_HANGUL, DATA, SEED
 from .plate_synth import make_scene, relight, random_plate_text
 
 

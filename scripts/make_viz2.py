@@ -18,7 +18,7 @@ from kev.config import FIGS, DATA, SEED, ENVS, AnomalyCfg
 from kev.plate_synth import make_scene, apply_env, random_plate_text
 from kev.adaptive import AdaptiveSensor
 from kev.occupancy import simulate
-from kev.anomaly import ParkingAnomalyDetector, features
+from kev.anomaly import ParkingAnomalyDetector
 
 ENV_KO = {"day_normal": "주간정상", "low_light": "야간", "glare": "글레어",
           "backlit": "역광", "overexposed": "과노출", "rain": "비",

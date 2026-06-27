@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from kev.plotting import use_korean; use_korean()
 from kev.config import DATA, FIGS, SEED, AnomalyCfg
 from kev.occupancy import simulate
-from kev.anomaly import ParkingAnomalyDetector, features
+from kev.anomaly import ParkingAnomalyDetector
 
 TYPES = ["unauthorized", "fault"]
 PRED_LABELS = ["normal", "unauthorized", "fault", "anomaly"]

@@ -4,7 +4,6 @@
 from __future__ import annotations
 import sys, os, json, time, csv
 from pathlib import Path
-import numpy as np
 import cv2
 import matplotlib
 matplotlib.use("Agg")
@@ -12,7 +11,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from kev.plotting import use_korean; use_korean()
-from kev.config import DATA, FIGS, SEED, PlateCfg
+from kev.config import DATA, FIGS, SEED
 from kev.plate import (build_yolo_dataset, train_detector, export_onnx,
                        quantize_static_int8, OnnxYolo,
                        PlateReader, char_accuracy)

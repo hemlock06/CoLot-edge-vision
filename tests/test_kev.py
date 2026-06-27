@@ -8,8 +8,8 @@ from kev.config import PLATE_RE, ENVS, WEATHER_ENVS, DATA
 from kev.plate_synth import (render_plate, random_plate_text, make_scene, relight,
                              add_weather, apply_env)
 from kev.adaptive import (brightness_features, FEATURE_ORDER, feature_vector,
-                          rule_label, readability, AdaptiveSensor)
-from kev.plate import preprocess, char_accuracy, _letterbox
+                          readability, AdaptiveSensor)
+from kev.plate import preprocess, char_accuracy
 from kev.occupancy import simulate, Event
 from kev.anomaly import ParkingAnomalyDetector, features, FEATS
 

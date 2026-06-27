@@ -6,12 +6,11 @@
 """
 from __future__ import annotations
 import argparse, sys
-from pathlib import Path
 import cv2
 import joblib
 
 from .config import DATA
-from .adaptive import AdaptiveSensor, brightness_features, readability
+from .adaptive import AdaptiveSensor
 
 
 def cmd_adaptive(args):

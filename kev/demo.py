@@ -1,12 +1,11 @@
 """통합 파이프라인 데모 시나리오 — ③→①→②를 한 입출차 흐름에 태움."""
 from __future__ import annotations
 import random
-from pathlib import Path
 import numpy as np
 import cv2
 
-from .config import DATA, FIGS, PlateCfg
-from .plate_synth import make_scene, relight, apply_env, random_plate_text, _asphalt
+from .config import DATA, FIGS
+from .plate_synth import make_scene, apply_env, random_plate_text, _asphalt
 from .plate import OnnxYolo, PlateReader
 from .occupancy import Event
 from .pipeline import build_pipeline

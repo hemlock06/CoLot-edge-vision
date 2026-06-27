@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from kev.plotting import use_korean; use_korean()
-from kev.config import FIGS, SEED, LIGHT_ENVS
+from kev.config import FIGS, LIGHT_ENVS
 from kev.plate_synth import (render_plate, make_scene, relight, add_weather,
                              random_plate_text, _asphalt)
 

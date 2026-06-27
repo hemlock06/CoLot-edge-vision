@@ -4,7 +4,7 @@
 산출: data/real_metrics.json, figs/real_validation.png
 """
 from __future__ import annotations
-import sys, json, glob, re
+import sys, json, glob
 from pathlib import Path
 import numpy as np
 import cv2
@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from kev.plotting import use_korean; use_korean()
-from kev.config import DATA, FIGS, PLATE_RE
+from kev.config import DATA, FIGS
 from kev.adaptive import AdaptiveSensor
-from kev.plate import OnnxYolo, PLATE_ALLOW, correct_plate
+from kev.plate import OnnxYolo, PLATE_ALLOW
 import joblib
 
 

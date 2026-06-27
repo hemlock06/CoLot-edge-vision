@@ -9,7 +9,6 @@
 from __future__ import annotations
 import random
 from pathlib import Path
-from typing import Optional
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFont
