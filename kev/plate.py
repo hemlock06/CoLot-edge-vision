@@ -8,7 +8,9 @@
 """
 
 from __future__ import annotations
-import re, time, csv
+import re
+import time
+import csv
 from pathlib import Path
 import numpy as np
 import cv2
