@@ -24,7 +24,6 @@ from kev.config import (
     PLATE_RE,
     PLATE_HANGUL,
     SEED,
-    AdaptiveCfg,
     AnomalyCfg,
 )
 
